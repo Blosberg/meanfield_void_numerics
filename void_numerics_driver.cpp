@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 {
 int     L=0, w=0, j=0, test_result=0; 
 //---the size of the system, # of plots to make, size of particle, size of footprint, counting index, dummy.
-double  t0, t1, rm, E0, CGF, kHNG_CG, kHNG_exact_test, irho_target;
+double  t0, t1, rm, E0, CGF, kHNG_CG, kHNG_exact_test, irho_target , muN_input;
 bool    shouldplotvoiddist, shouldplotrhos, HNG, SNG, LNG;
 bool    boltzmann_on_uphill, boltzmann_on_add, boltzmann_on_removal;
 
@@ -59,7 +59,7 @@ double muN_original=0.0; // chemical potential used to determine rp;
 //--'command line parameters'------------------------------------------------------------------------
 if (argc != 3)
 	{
-	cout << "\n error: expecting 2 command-line argument (1) ksize and (2) NG type. Instead we got " << argc << " arguments which were:\n";
+	cout << "\n error: expecting 2 command-line argument (1) taskID and (2) NG type. Instead we got " << argc << " arguments which were:\n";
 	for (j=1;j<argc;j++)
 		{
 		cout << argv[j] << ",  ";
@@ -90,7 +90,7 @@ string BZflag; //-----flag to determine which reactions are weighted by boltzman
 fin  >> L;			// size of the system after coarse-graining (therefore size of max void.)
 fin  >> t0 >> t1;		// initial time step, termination time.
 
-fin  >> muN >> irho_target; 	// chemical potential without coarse-graining. *MAYBE* the irho_target parameter is used.
+fin  >> muN_input >> irho_target; 	// chemical potential without coarse-graining. *MAYBE* the irho_target parameter is used.
 fin  >> kHNG_exact_test >> kHNG_CG;	// size of the particle before and after coarse-graining. should be usually 147
 fin  >> w >> E0;	// size of the footprint
 
@@ -99,7 +99,6 @@ fin  >> BZflag;
 fin  >> parity_check;
 fin  >> pathout;
 fin.close();
-
 
 //----------------------------------------------------------
 string BZ;
@@ -126,7 +125,7 @@ else if(BZflag == "boltzmann_on_removal")
 	}
 else
 	{
-	cout << "\n ERROR: bolzmann criteria is either conflicting or undefined.\n";
+	cout << "\n ERROR: bolzmann criteria is : " << BZflag << " -which is either conflicting or undefined.\n";
 	exit(1);
 	}
 
@@ -150,7 +149,9 @@ else
 CGF=kHNG_exact/kHNG_CG; //------DO THE COARSE-GRAINING CALCULATION ON OUR OWN HERE.
 string CGF_getmu_feedin;
 
-/*--------@@@  irho_target = irho_target + (double(TASKID-1))*5.0;
+// /*--------@@@  
+
+irho_target = irho_target + (double(TASKID-1))*5.0;
 
 if(kHNG_CG == kHNG_exact)
 	{
@@ -167,12 +168,13 @@ else
 cout << "\n the CGF string is :" << CGF_getmu_feedin << endl;
 muN_original = interpolate_mu_from_rhoi(irho_target,w,E0,kHNG_exact,NGtype, CGF_getmu_feedin );
 
------@@@ **/
-muN_original = muN + 1.0*(TASKID-1); 
+// -----@@@ **/
 
+/* ! @@@
+muN_original = muN_input + 1.0*(TASKID-1); 
+@@@ ! */
 
 cout << "\n choice of target irho=" << irho_target << ", leads to selection of muN=" << muN_original << endl;
-
 
 double muN_CG = muN_original + gsl_sf_log(CGF); //---scale the effective chemical potential according to the coarse-graining.
 
