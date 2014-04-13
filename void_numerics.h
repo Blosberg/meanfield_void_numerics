@@ -1,5 +1,7 @@
 /*  void_numerics.h--class def's and func decl's (func definitions are in another .h file)
-// ---last updated on  Fri Sep 27 14:37:44 CEST 2013  by  Brendan.Osberg  at location  th-ws-e537
+// ---last updated on  Sun Apr 13 23:34:52 CEST 2014  by  bren  at location  bren-Desktop
+
+//  changes from  Sun Apr 13 23:34:52 CEST 2014 : modified the script for explicitly-sized particles (i.e. suitable for dimers, trimers, etc., no longer just coarse-grained full-sized Nucl's.)
 */
 
 
@@ -17,7 +19,6 @@
 using namespace std;
 
 const bool irreversible=false;
-const int kHNG_exact = 147; //---the 'orignal' size of the particle should always be 147
 
 
 //******************************************************************
@@ -34,13 +35,13 @@ public:
 // double  *V; //-----------this will be the array of voids.
 
 double * v2; 		//----- v2[x]       = the energetic potential of two particles with 'x' empty sites between them.
-double * v2_uncoarsened;
 double * Bzman_v2;	//----- Bzman_v2[x] = exp(-v2[x]), the boltzmann factor thereof.
 int size_v2;		// the number of points in the v2 potential (beyond which it is assumed v2=0)
 double * xcoarse;
 
-double irho_target;	//---this is the input density value that we use as a basis for choosing mu.
 double rho;		//---the average density.
+double maxrho;		//--- the maximum density observed within a single run.
+
 double rhostar;		//---the normalization factor.
 double coverage;	//---between [0,1], the fraction of lattice sites covered by a particle.
 
@@ -54,17 +55,14 @@ double std_dev;
 double rm; // = r-'minus' -the off rate.
 double rp; // = r-'plus'  -the on rate.
 double r;  // = r+/r-
-double muN_CG;
+double muN;
 
-int kHNG_CG; //---the finite size of the particles in the coarse-grained system.
-int kHNG_original; //-----this should always be set to 147 in the constructor
-int w; //---the range of interaction.
-int p; //---the footprint size p=2*w+1
+int a; //---the range of interaction.
 int L; //---the size of the system /max void.
+
 double E0;
 double t;
 double t0, t1; //--the initial step time, and the final simulation time.
-double CGF; //---coarse-graining factor.
 
 bool* printq;		//----the queue of plots to make.
 double* tpoints_vdist;	//----the array of points in time to make this plot.

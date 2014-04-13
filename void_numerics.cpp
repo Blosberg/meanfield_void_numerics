@@ -1,5 +1,7 @@
 //---------------------------------------------------------------------------------------------
-// ---last updated on  Fri Sep 27 14:37:27 CEST 2013  by  Brendan.Osberg  at location  th-ws-e537
+// ---last updated on  Sun Apr 13 23:34:52 CEST 2014  by  bren  at location  bren-Desktop
+
+//  changes from  Sun Apr 13 23:34:52 CEST 2014 : modified the script for explicitly-sized particles (i.e. suitable for dimers, trimers, etc., no longer just coarse-grained full-sized Nucl's.)
 //---------------------------------------------------------------------------------------------
 
 
@@ -67,6 +69,7 @@ V[P->L]=1.0; //----just set the whole system to completely empty for the beginni
 
 //--------------  document the potential in the log file.  ------------------------
 *P->log << "\n-------------------------------------------"; 
+/*
 *P->log << "\n the two-body is of size " << P->size_v2 << ", and is as follows: \n ";
 
 for (i=0;i< P->size_v2;i++)
@@ -74,7 +77,7 @@ for (i=0;i< P->size_v2;i++)
 	*P->log << i << " \t " <<  P->v2[i] << " \t " << P->Bzman_v2[i] << endl;
  	}
 *P->log << "\n-------------------------------------------"; 
-
+*/
 
 bool shouldprint=false;
 //--------------SET UP THE NECESSARY dE evolution parameters--------------	
@@ -105,7 +108,7 @@ const double deltaspacing = gsl_sf_log(10)/Np10_rho; //steps with lower resoluti
 rho_t	   = (*P).get_rho_anal(V);
 P->step    = 0;
 
-double t_lastplot=h/10.0; //---this should insure that the first point gets plotted
+double t_lastplot=h/10.0; //---this should ensure that the first point gets plotted
 
 while (t < P->t1)
 	{ 
@@ -145,6 +148,10 @@ while (t < P->t1)
 	rhodot_num  = (rho_t-rho_old)/(t-t_old);
 	P->t = t;
 
+	if (rho_t > P->maxrho)
+		{
+		P->maxrho = rho_t;	// remember that the *ACTUAL* density still has to be divided by L
+		}
 
 	//--------take snapshots in time------------------------------
 
@@ -163,7 +170,7 @@ while (t < P->t1)
 		t_lastplot = t; //---update the current "last point plotted"
 
 		//---------------------OUTPUT TO FILE ----THIS IS WHERE WE PLOT THE FILLING -------------------------
-		 *foutmain << t << "\t" << (((*P).rho)/(P->L*P->CGF)) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
+		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
 
 		}
 

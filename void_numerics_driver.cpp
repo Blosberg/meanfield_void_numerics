@@ -1,12 +1,14 @@
 /*--- VOID NUMERICS DRIVER SCRIPT -TESTS THE EQUATIONS DERIVED FOR SNG IN ANALOGY WITH REDNER -----
-// ---last updated on  Tue Nov 26 19:18:48 CET 2013  by  Brendan.Osberg  at location  th-ws-e537
+// ---last updated on  Sun Apr 13 23:34:52 CEST 2014  by  bren  at location  bren-Desktop
+
+//  changes from  Sun Apr 13 23:34:52 CEST 2014 : modified the script for explicitly-sized particles (i.e. suitable for dimers, trimers, etc., no longer just coarse-grained full-sized Nucl's.)
 
 //  changes from  Tue Nov 26 19:18:48 CET 2013 : ran valgrind to clean up mem. management. Added a destructor to the ODEdata class.
 //-----------------------------------------------------------------------------------------------*/
 
 
 #include <fstream>
-#include <cmath>
+#include <math.h>
 #include <iostream>
 #include <stdio.h>
 #include <sstream>
@@ -46,17 +48,15 @@ double interpolate_mu_from_rhoi(const double irho_target,const int w, const doub
 
 int main(int argc, char *argv[])
 {
-int     L=0, w=0, j=0, test_result=0; 
+int     L=0, a=0, j=0, test_result=0; 
 //---the size of the system, # of plots to make, size of particle, size of footprint, counting index, dummy.
-double  t0, t1, rm, E0, CGF, kHNG_CG, kHNG_exact_test, irho_target , muN_input;
+double  t0, t1, rm, E0,  muN_input, muN;
 bool    shouldplotvoiddist, shouldplotrhos, HNG, SNG, LNG;
 bool    boltzmann_on_uphill, boltzmann_on_add, boltzmann_on_removal;
 
 string  pathout;
 
-double muN_original=0.0; // chemical potential used to determine rp;
-
-//--'command line parameters'------------------------------------------------------------------------
+//--'command line parameters' ---------------------------------------------------
 if (argc != 3)
 	{
 	cout << "\n error: expecting 2 command-line argument (1) taskID and (2) NG type. Instead we got " << argc << " arguments which were:\n";
@@ -90,15 +90,20 @@ string BZflag; //-----flag to determine which reactions are weighted by boltzman
 fin  >> L;			// size of the system after coarse-graining (therefore size of max void.)
 fin  >> t0 >> t1;		// initial time step, termination time.
 
-fin  >> muN_input >> irho_target; 	// chemical potential without coarse-graining. *MAYBE* the irho_target parameter is used.
-fin  >> kHNG_exact_test >> kHNG_CG;	// size of the particle before and after coarse-graining. should be usually 147
-fin  >> w >> E0;	// size of the footprint
+fin  >> muN_input; 	// chemical potential -there is no coarse-graining in this framework.
+fin  >> a >> E0;	// size of the footprint
 
 fin  >> shouldplotvoiddist >> shouldplotrhos;		// boolean should we print the void dist profiles.
 fin  >> BZflag;
 fin  >> parity_check;
 fin  >> pathout;
 fin.close();
+
+if (parity_check != 88855888)
+	{
+	cout << "\n ERROR in ordering of input parameters. exiting. \n"; 
+	exit(1);
+	}
 
 //----------------------------------------------------------
 string BZ;
@@ -133,66 +138,22 @@ else
 
 if(irreversible)
 	{
-	rm=0.0;		// rate off ALWAYS =1 
+	rm=0.0;		// rate off ALWAYS =0
 	}
 else
 	{
 	rm=1.0;		// rate off ALWAYS =1 
 	}
 
-
-
-
 //---------------------------------------------------------
 
 
-CGF=kHNG_exact/kHNG_CG; //------DO THE COARSE-GRAINING CALCULATION ON OUR OWN HERE.
-string CGF_getmu_feedin;
-
-// /*--------@@@  
-
-irho_target = irho_target + (double(TASKID-1))*5.0;
-
-if(kHNG_CG == kHNG_exact)
-	{
-	CGF_getmu_feedin ="1";	
-	}
-else
-	{
-	clear_charray(cpath, charlength );
-
-	sprintf(cpath, "%do%d",kHNG_exact,int(kHNG_CG));
-	CGF_getmu_feedin = cpath;
-	}
-
-cout << "\n the CGF string is :" << CGF_getmu_feedin << endl;
-muN_original = interpolate_mu_from_rhoi(irho_target,w,E0,kHNG_exact,NGtype, CGF_getmu_feedin );
-
-// -----@@@ **/
-
-/* ! @@@
-muN_original = muN_input + 1.0*(TASKID-1); 
-@@@ ! */
-
-cout << "\n choice of target irho=" << irho_target << ", leads to selection of muN=" << muN_original << endl;
-
-double muN_CG = muN_original + gsl_sf_log(CGF); //---scale the effective chemical potential according to the coarse-graining.
+muN = muN_input + 1.0*(TASKID-1); // ---stagger the muN values according to input for parallelization.
 
 //---this is done for both SNG and HNG cases.
 
-
 int init=L;
-if (kHNG_exact_test != kHNG_exact )
-	{
-	cout << "\n ERROR in comparison of expected kHNG_exact. \n"; 
-	exit(1);
-	}
 
-if (parity_check != 88855888)
-	{
-	cout << "\n ERROR in ordering of input parameters. exiting. \n"; 
-	exit(1);
-	}
 if(NGtype=="SNG")
 	{
 	SNG=true; HNG=false; LNG=false;
@@ -204,9 +165,9 @@ else if(NGtype=="LNG")
 else if(NGtype=="HNG")
 	{
 	 HNG=true; SNG=false; LNG=false;
-	if ( fabs (kHNG_CG -round(kHNG_CG) ) > 0.0000001) //----make sure it's an integer
+	if ( fmod (a,1) > 0.0000001) //----make sure it's an integer
 		{
-		cout << "\n ERROR: k value is not an integer. Exiting.\n\n";
+		cout << "\n ERROR: a = " << a << " value is not an integer despite HNG selection. Exiting.\n\n";
 		exit(1);
 		}
 	//---else just continue as normal.
@@ -219,12 +180,12 @@ else
 
 //---------------------CHECK IF SYSTEM SIZE IS LARGE ENOUGH
 
-	if( ( (SNG || LNG) && L < 5*(2*w+1)/CGF)  || (HNG && L < 5*kHNG_CG ) )
-		{
-		cout << "\n WARNING: system size is less than 5 particles. exiting.\n";
-//!		cout << " the interaction range of the coarse-grained particles. too small. Exiting.\n";
-//!		exit(1);
-		}
+if( L < 5*a  )
+	{
+	cout << "\n WARNING: system size is less than 5 particles. exiting.\n";
+//!	cout << " the interaction range of the coarse-grained particles. too small. Exiting.\n";
+//!	exit(1);
+	}
 
 
 //-------------------------- setup the log file--------------------------
@@ -247,48 +208,32 @@ clear_charray(cpath, charlength );
 sprintf(cpath, "%svoid_job.log",pathout.c_str());
 
 ofstream *flog = new ofstream(cpath);
+ofstream v2pot_output;
 
-if(HNG)
-	{
-	*flog << "\n new k (effective) is: " << kHNG_CG;
-	*flog << "\n L/k ratio  =" << (L/kHNG_CG) << endl;
-	}
-else if(SNG || LNG )
-	{
-	*flog << "\n new footprint p is "   << (2*float(w)/CGF);
-	*flog << "\n L/footprint ratio is " << L/(2*float(w)/CGF);
-	}
-//-----------------------------------------------------------------------
-*flog << "\n coarse-graining is set to : " << CGF;
-*flog << "\n based on mu=" << muN_original;
-*flog << "\n chosen for irho_target =" << irho_target;
+//----------- DOCUMENTATION ------------------------------------------------------------
+
+*flog << "\n for this run, mu=" << muN;
 *flog << "\n system size, L=" << L;
 *flog << "\n NGtype = " << NGtype;
 *flog << "\n t0 = " << t0 ;
 *flog << "\n t1 = " << t1 ;
-*flog << "\n kHNG_exact = " << kHNG_exact;
-*flog << "\n kHNG_CG    = " << kHNG_CG;
-*flog << "\n w = " << w << ", E0 = " << E0;
+*flog << "\n a = " << a << ", E0 = " << E0;
 *flog << "\n shouldplotvoiddist = " << shouldplotvoiddist << ", shouldplotrhos = " << shouldplotrhos;
 *flog << "\n BZflag =" << BZflag << endl;
-*flog << "\n choice of target irho=" << irho_target << ", leads to selection of muN=" << muN_original << endl;
-*flog << "\n CGF = " << CGF << endl;
 
-//-----------------------------------------------------------------------
+//--------------------- SET UP PARAMETERS --------------------------------------------------
 
-double rates_times[6];
+double rates_times[5];
 rates_times[0] = t0;
 rates_times[1] = t1;
 rates_times[2] = rm;
-rates_times[3] = muN_original;
+rates_times[3] = muN;
 rates_times[4] = E0;
-rates_times[5] = CGF;	//----coarse-graining factor.
 
 
-int sizes[3];
+int sizes[2];
 sizes[0] = L;
-sizes[1] = kHNG_CG;	//---the finite size of the particles in the coarse-grained system.
-sizes[2] = w;
+sizes[1] = a;	//---the finite size of the particles.
 
 
 bool B[8];
@@ -305,77 +250,84 @@ B[7] = boltzmann_on_uphill;
 
 ODEdat* P;   //----'P' is simply our catch-all data structure.
 ofstream *foutmain;
-ofstream test;
-
-
-//----this is what gets plotted:
-//*foutmain << t << "\t" << (((*P).rho)/(P->L*P->CGF)) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
-//--------------------------------
-
-P=new ODEdat(rates_times, sizes, B, pathout);   // ---THE 2-BODY INTERACTION IS CALCULATED 
-						// ---AND ASSIGNED IN THE CONSTRUCTOR.
-
-
-if(SNG || LNG)
-	{//--------just output the potential to file to take a look at it
-
-	if( P->L < 5*(2*w+1)/CGF )
-		{
-		cout << "\n WARNING: the system size you have chosen is less than 5 times ";
-		}
-
-
-	//-----------------------TEST PLOT TO SEE WHAT THE POTENTIAL LOOKS LIKE --------------
-	clear_charray(cpath, charlength );
-
-	sprintf(cpath, "%sv2%spotentialfull_E0_%lf_w_%d.txt",pathout.c_str(),NGtype.c_str(),E0,w);
-	test.open(cpath);
-	for(j=0;j<(2*w+1);j++)
-		{test << (j+1) << "\t" << P->v2_uncoarsened[j] << endl ;}	
-	test.close();
-	clear_charray(cpath, charlength );
-
-	sprintf(cpath, "%sv2%spotential_coarsening_by_%lf_E0_%lf_w_%d.txt",pathout.c_str(),NGtype.c_str(),CGF,E0,w);
-	test.open(cpath);
-
-	for(j=0;j<=L;j++)
-		{test << P->xcoarse[j]  << "\t" << P->v2[j] << endl;}	
-	test.close();
-	//------------------------------TEST PLOT FINISHED HERE --------------------------------*/
-	}
+ofstream *maxrhovals;
 
 clear_charray(cpath, charlength );
-sprintf(cpath, "%svoiddat%sBZ%s_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str());
-
-foutmain = new ofstream(cpath);	
-
-
-(*P).log = flog;
-
-//-
+sprintf(cpath, "%smax_rhovals_%sBZ%s_E0-%lf.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(), E0);
+maxrhovals = new ofstream(cpath);	
 
 
+double dE0        = 1.0;
+double minE0      = 1.0;
+int num_E0_sample = 30;
+// ----------------- @@@ HERE IS WHERE WE SHOULD INSERT REPETITION OVER EPSILON SCAN. -----------
 
-//------------read in parameters from previous iteration--------------
+int i=0;
+for(i=0;i<num_E0_sample; i++ )
+	{
+	rates_times[4] = minE0 + double(i) * dE0;
 
-test_result=time_go(P, foutmain);
+	P=new ODEdat(rates_times, sizes, B, pathout);   // ---THE 2-BODY INTERACTION IS CALCULATED 
+						// ---AND ASSIGNED IN THE CONSTRUCTOR.
 
-*flog << "\n upon completion: L=" << L << " rho=" <<  (((*P).rho)/(P->L*P->CGF))  << "; sigma=" << P->std_dev << "; mu="<<P->mean <<"; tf=" << P->t;
-(*flog).close();
+	//------------------------------------------------------------------------------------------
+	if(SNG || LNG)
+		{//--------just output the potential to file to take a look at it
+	
+		if( L < 5*a )
+			{
+			cout << "\n WARNING: the system size you have chosen is less than 5 times the particle size ";
+			}
+
+		//-----------------------TEST PLOT TO SEE WHAT THE POTENTIAL LOOKS LIKE --------------
+		clear_charray(cpath, charlength );
+	
+		sprintf(cpath, "%sv2%spotentialfull_E0_%lf_a_%d.txt",pathout.c_str(),NGtype.c_str(),P->E0,a);
+		v2pot_output.open(cpath);
+		for(j=0;j< a;j++)
+			{v2pot_output << (j+1) << "\t" << P->v2[j] << endl ;}	
+		v2pot_output.close();
+		//---------------   TEST PLOT FINISHED HERE    ----------------------------*/
+		}
+	//------------------------------------------------------------------------------------------
 
 
-cout << "\n upon completion, system density was:" <<  (((*P).rho)/(P->L*P->CGF))  << " at time" << P->t;
-cout << "\n void numerics program complete. exiting successfully.\n";
+	(*P).log = flog;
 
-//-------------------------- CLOSE FILES AND CLEAN UP MEMORY ---------------------
-(*foutmain).close();
-delete foutmain;
+
+	//------------read in parameters from previous iteration--------------
+
+	clear_charray(cpath, charlength );
+	sprintf(cpath, "%svoiddat%sBZ%s_E0-%lf_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0);
+	foutmain = new ofstream(cpath);	
+	// this is what gets plotted:
+	// *foutmain << t << "\t" << ((*P).rho)/P->L) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
+	//--------------------------------
+
+
+	test_result=time_go(P, foutmain);
+
+	// *flog << "\n upon completion: L=" << L << " rho=" << "; sigma=" << P->std_dev << "; mu="<<P->mean <<"; tf=" << P->t;
+
+
+	cout << "\n upon completion, system density was:" <<  (P->rho)  << " at time" << P->t;
+	cout << "\n void numerics program complete. exiting successfully.\n";
+	
+	*maxrhovals << (P->E0) << " \t " << (P->maxrho/P->L)  << " \t " << (P->rho/P->L) << endl; 
+
+	//-------------------------- CLOSE FILES AND CLEAN UP MEMORY ---------------------
+	(*foutmain).close();
+	delete foutmain;
+
+
+	delete P;
+	}
+
+//---------------- @@@ DOWN TO HERE ---------------------
+//--------------------------------------------------------------------------------
 
 (*flog).close();
 delete flog;
-
-delete P;
-//--------------------------------------------------------------------------------
 
 
 return 0;

@@ -1,5 +1,7 @@
 //---void.h -function definitions for the void numerics calculation.
-// ---last updated on  Tue Nov 26 19:18:48 CET 2013  by  Brendan.Osberg  at location  th-ws-e537
+// ---last updated on  Sun Apr 13 23:34:52 CEST 2014  by  bren  at location  bren-Desktop
+
+//  changes from  Sun Apr 13 23:34:52 CEST 2014 : modified the script for explicitly-sized particles (i.e. suitable for dimers, trimers, etc., no longer just coarse-grained full-sized Nucl's.)
 
 //  changes from  Tue Nov 26 19:18:48 CET 2013 : ran valgrind to clean up mem. management. Added a destructor to the ODEdata class.
 //-------------------------------------------------------------------------------
@@ -40,13 +42,11 @@ int i;
 t0  = rates_times[0];
 t1  = rates_times[1];
 rm  = rates_times[2];
-double muN_original  = rates_times[3];
+muN = rates_times[3];
 E0  = rates_times[4];
-CGF = rates_times[5];	//----coarse-graining factor.
 
 L        = sizes[0];
-kHNG_CG  = sizes[1];
-w        = sizes[2];
+a        = sizes[1];
 
 shouldplotvoiddist   = B[0];
 shouldplotrhos       = B[1];
@@ -87,11 +87,8 @@ xcoarse  = new double[L+1];
 
 //--------------coarse graining here:--------------------------------------
 
-muN_CG = muN_original + gsl_sf_log(CGF); //---scale the effective chemical potential according to the coarse-graining
-rp = gsl_sf_exp(muN_CG); 
+rp = gsl_sf_exp(muN); 
 r  = rp/rm;		//---keep these two lines constant for now!
-
-kHNG_original = 147;
 
 if(SNG || LNG )
 	{
@@ -100,9 +97,6 @@ if(SNG || LNG )
 
 	Bzman_v2 = new double[L+1];
 	v2       = new double[L+1];
-	p=2*w+1;
-	v2_uncoarsened    = new double[p];
-
 
 	for(i=0;i<=L;i++)
 		{
@@ -111,22 +105,19 @@ if(SNG || LNG )
 		xcoarse[i]  = 0.0;
 		}
 
-	for(i=0;i<p;i++)
-		{v2_uncoarsened[i]=0.0;}
+	for(i=0;i<a;i++)
+		{v2[i]=0.0;}
 	if(SNG)
 		{
-		VNN_SNG_calc( v2_uncoarsened, w, E0);
+		VNN_SNG_calc_smallp(v2, L, a, E0); 
 		}
 	else if(LNG)
 		{
-		VNN_LNG_calc( v2_uncoarsened, w, E0);
+		VNN_LNG_calc_smallp(v2, a, E0); 
 		}
 
-
-	coarse_grain( v2_uncoarsened, xcoarse, v2, L, 2*w+1, CGF); //--coarse-grain the 2-bo	
-
-	//-------------------- got the potential and coarse-grained it: from here, SNG and LNG are treated the same 
-	//-------------------- (they just have a different v2 potential from here).
+	//---- got the potential: from here, SNG and LNG are treated the same 
+	//------(they just have a different v2 potential from here).
 
 	for(i=0;i<=L;i++)
 		{
@@ -137,16 +128,15 @@ else if (HNG)
 	{
 	Bzman_v2 = NULL;	//----- code it this way to act as a warning in case v2 
 	v2       = NULL;	//----- is ever accessed during an HNG run (it shouldn't be).
-	v2_uncoarsened    = NULL;
 
 	/*-------here is where we hard code the HNG in the same way as SNG.------
 	for(i=0;i<=L;i++)
 		{
-		if(i<kHNG_CG)
+		if(i<a)
 			{
 			Bzman_v2[i] = 1.0;
 			}		
-		else if(i>=kHNG_CG)
+		else if(i>=a)
 			{
 			Bzman_v2[i] = 0.0;
 			}		
@@ -174,6 +164,7 @@ space_tpoints_logarithmic(t0, t1, Np10 , total_obs_vdist, tpoints_vdist );
 
 
 rho     = 0.0;
+maxrho  = 0.0;
 rhostar = 0.0;
 C1      = 0.0;
 C2      = 0.0;
@@ -189,7 +180,6 @@ if(SNG || LNG )
 	{
 	delete [] Bzman_v2;
 	delete [] v2;
-	delete [] v2_uncoarsened;
 	}
 
 delete [] printq;
@@ -241,7 +231,7 @@ size_v2		= param.size_v2;		// the number of points in the v2 potential (beyond w
 
 rho		= param.rho;		//---the average density.
 rhostar		= param.rhostar;	//---the normalization factor.
-//! rhodot		= param.rhodot;		//---the derivative
+maxrho		= param.maxrho;		//---the derivative
 empty_space	= param.empty_space;
 C1		= param.C1;
 C2		= param.C2;
@@ -250,8 +240,7 @@ rm		=param.rm; // = r-'minus' -the off rate.
 rp		=param.rp; // = r-'plus'  -the on rate.
 r		=param.r;  // = r+/r-
 
-kHNG_CG		=param.kHNG_CG; //---the finite size of the particles.
-w		=param.w; //---the range of interaction.
+a		=param.a; //---the finite size of the particles.
 L		=param.L; //---the size of the system /max void.
 t		=param.t;
 t1		=param.t1;
@@ -274,6 +263,7 @@ log			=param.log;
 step			=param.step;
 
 return *this;
+
 }
 
 //****************************************************************
@@ -296,13 +286,13 @@ for(i=0;i<=L;i++)
 
 for(i=0;i<=L;i++)
 	{
-	mean += i*CGF*(V[i]/Voidsum); //i*CGF is the void size V[i]/Voidsum is the probability.
-	checknorm += V[i]/Voidsum; //---normalization factor for Void distances;
+	mean += i*(V[i]/Voidsum);  //--- i is the void size; V[i]/Voidsum is the probability.
+	checknorm += V[i]/Voidsum; //--- normalization factor for Void distances;
 	}
 
 for(i=0;i<=L;i++)
 	{
-	std_dev += ( (V[i]/Voidsum)* (double(i)*CGF-mean)*(double(i)*CGF-mean) ); //---calculate the std.dev.
+	std_dev += ( (V[i]/Voidsum)* (double(i)-mean)*(double(i)-mean) ); //---calculate the std.dev.
 	}
 
 std_dev=sqrt(std_dev);
@@ -359,19 +349,7 @@ int  charlength=400; //--the number of characters in the string for our path.
 char cpath[charlength];
 clear_charray(cpath, charlength );
 
-string detail1;
-string detail2;
 
-if(HNG)
-	{
-	detail1="HNG_k";
-	detail2=convertInt(kHNG_CG);
-	}
-else
-	{
-	detail1="SNG_w";
-	detail2=convertInt(w);
-	}
 //----------------------------------------------------------------
 if( plotnum < 10)
 	{
@@ -400,14 +378,14 @@ ofstream fvout(cpath);
 //-------get Redner's formula:
 double A     = coverage*coverage*(CGF*L) /( kHNG_original * (coverage + kHNG_original*(1.0-coverage )  ) );
 double alpha = gsl_sf_log( 1 + coverage/(kHNG_original*(1.0-coverage) )  );
-double A_CG     = coverage*coverage*(L) /( kHNG_CG * (coverage + kHNG_CG*(1.0-coverage )  ) );
-double alpha_CG = gsl_sf_log( 1 + coverage/(kHNG_CG*(1.0-coverage) )  );
+double A_CG     = coverage*coverage*(L) /( a * (coverage + a*(1.0-coverage )  ) );
+double alpha_CG = gsl_sf_log( 1 + coverage/(a*(1.0-coverage) )  );
 */
 
 //--------------------------PLOT THE VOID DISTRIBUTION AS A FUNCTION OF X ------------------------
 for(i=0;i<L;i++)
 	{
-	fvout << (i+1)*CGF << " \t " << V[i]/(CGF*L) << " \t " << V[i]/rho << endl;
+	fvout << (i+1) << " \t " << V[i]/(L) << " \t " << V[i]/rho << endl;
 	}
 //---------------NOW THE TIME ASSOCIATED WITH THIS PARTICULAR plotnum iteration------------------
 
@@ -419,7 +397,7 @@ if(plotnum==0)
 else
 	pn.open(cpath,fstream::app);
 
-pn << plotnum << " \t " << t << " \t " << (rho/(L*CGF)) << " \t " << coverage << endl;
+pn << plotnum << " \t " << t << " \t " << (rho/L) << " \t " << coverage << endl;
 
 //------------------------------------------------------------------------------------------------
 
@@ -496,7 +474,7 @@ ODEdat*  P = (ODEdat *)params;
 
 int j,m; //-----counter ints
 double C=0.0;
-int  kn = P->kHNG_CG; // ----the particle size.
+int  kn = P->a; // ----the particle size.
 int  L  = P->L; // ----the system size.
 //---------------------------------------------------------
 P->attempt +=1;		// keep track of the number of times we've "attempted to time-step here"
@@ -736,7 +714,7 @@ double inner_sum=0.0;
 if(HNG)
 	{
 	//------------ GET THE HNG NUMERATOR -------
-	for (n=0;n<=(L-3*kHNG_CG);n++)
+	for (n=0;n<=(L-3*a);n++)
 		{
 		inner_sum = 0.0;
 
@@ -745,9 +723,9 @@ if(HNG)
 			inner_sum += (V[j]*V[n-j]);
 			}
 
-		num += (double(n)+2.0*double(kHNG_CG))*inner_sum;
+		num += (double(n)+2.0*double(a))*inner_sum;
 		}
-	n=L-2*kHNG_CG;//=1
+	n=L-2*a;//=1
 	inner_sum = 0.0;
 
 	for (j=0;j<=n;j++)
@@ -755,12 +733,12 @@ if(HNG)
 		inner_sum += (V[j]*V[n-j]);
 		}
 
-	num += (double(n)+2.0*double(kHNG_CG))*inner_sum;
+	num += (double(n)+2.0*double(a))*inner_sum;
 
 	//------------GET THE HNG DENOMINATOR ----------
-	for (m=0;m<=(L-2*kHNG_CG);m++)
+	for (m=0;m<=(L-2*a);m++)
 		{
-		denom +=2*(kHNG_CG+m)*V[m];
+		denom +=2*(a+m)*V[m];
 		}
 	//------------------------------------------
 	}
@@ -833,11 +811,11 @@ for(i=0;i<L;i++)
 rho=result;
 if(HNG)
 	{
-	coverage = rho*kHNG_CG/L;
+	coverage = rho*a/L;
 	}
 else if(SNG || LNG )
 	{
-	coverage = rho*p/L; //--implement the "coverage from DNA perspective later.
+	coverage = rho*a/L; //--implement the "coverage from DNA perspective later.
 	}
 else
 	{
@@ -859,12 +837,12 @@ double inner_sum=0.0;
 
 
 //----------------------------------------------
-for(m=0;m<=(L-2*kHNG_CG);m++)
+for(m=0;m<=(L-2*a);m++)
 	{
-	C1 += (-2*rm)*(kHNG_CG+m)*V[m];
+	C1 += (-2*rm)*(a+m)*V[m];
 	}
 //----------------------------------------------
-for(n=0;n<=(L-3*kHNG_CG);n++)
+for(n=0;n<=(L-3*a);n++)
 	{
 	inner_sum=0.0;
 	
@@ -872,17 +850,17 @@ for(n=0;n<=(L-3*kHNG_CG);n++)
 		{
 		inner_sum +=V[j]*V[n-j];		
 		}
-	C2+= (n+2*kHNG_CG)*rm*inner_sum;
+	C2+= (n+2*a)*rm*inner_sum;
 	}
-//---------now add on the last one for L-2kHNG_CG-----------
-n=L-2*kHNG_CG;
+//---------now add on the last one for L-2a-----------
+n=L-2*a;
 inner_sum = 0.0;
 
 for (j=0;j<=n;j++)
 	{
 	inner_sum += (V[j]*V[n-j]);
 	}
-C2+= (n+2*kHNG_CG)*rm*inner_sum;
+C2+= (n+2*a)*rm*inner_sum;
 //----------------------------------------------
 
 result = C1+C2/rhostar;
@@ -904,3 +882,9 @@ result=result;
 }
 
 #endif //--this ends the clause as to whether or not this symbol (i.e. this file) has been defined already.
+
+//*********************************************************************************
+
+
+
+
