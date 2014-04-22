@@ -212,7 +212,8 @@ ofstream v2pot_output;
 
 //----------- DOCUMENTATION ------------------------------------------------------------
 
-*flog << "\n for this run, mu=" << muN;
+*flog << "\n for this run, muN=" << muN;
+*flog << "\n muN_input = " << muN_input;
 *flog << "\n system size, L=" << L;
 *flog << "\n NGtype = " << NGtype;
 *flog << "\n t0 = " << t0 ;
@@ -253,12 +254,12 @@ ofstream *foutmain;
 ofstream *maxrhovals;
 
 clear_charray(cpath, charlength );
-sprintf(cpath, "%smax_rhovals_%sBZ%s_E0-%lf.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(), E0);
+sprintf(cpath, "%sovershootdat-%sBZ%s_E0_maxrho_finalrho.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str());
 maxrhovals = new ofstream(cpath);	
 
 
-double dE0        = 1.0;
-double minE0      = 1.0;
+double dE0        = 0.5;
+double minE0      = 0.5;
 int num_E0_sample = 30;
 // ----------------- @@@ HERE IS WHERE WE SHOULD INSERT REPETITION OVER EPSILON SCAN. -----------
 
@@ -298,7 +299,7 @@ for(i=0;i<num_E0_sample; i++ )
 	//------------read in parameters from previous iteration--------------
 
 	clear_charray(cpath, charlength );
-	sprintf(cpath, "%svoiddat%sBZ%s_E0-%lf_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0);
+	sprintf(cpath, "%svoiddat%sBZ%s_E0-%.1f_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0);
 	foutmain = new ofstream(cpath);	
 	// this is what gets plotted:
 	// *foutmain << t << "\t" << ((*P).rho)/P->L) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
