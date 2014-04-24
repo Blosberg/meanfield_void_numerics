@@ -49,17 +49,18 @@ double interpolate_mu_from_rhoi(const double irho_target,const int w, const doub
 int main(int argc, char *argv[])
 {
 int     L=0, a=0, j=0, test_result=0; 
+int 	neg_checkpoint=0;
 //---the size of the system, # of plots to make, size of particle, size of footprint, counting index, dummy.
 double  t0, t1, rm, E0,  muN_input, muN;
-bool    shouldplotvoiddist, shouldplotrhos, HNG, SNG, LNG;
-bool    boltzmann_on_uphill, boltzmann_on_add, boltzmann_on_removal;
+bool    shouldplotvoiddist, shouldplotrhos, HNG, SNG, LNG, should_check_neg;
+bool    boltzmann_on_uphill, boltzmann_on_add, boltzmann_on_removal, should_import_IC, should_export_IC;
 
 string  pathout;
 
 //--'command line parameters' ---------------------------------------------------
-if (argc != 3)
+if (argc != 4)
 	{
-	cout << "\n error: expecting 2 command-line argument (1) taskID and (2) NG type. Instead we got " << argc << " arguments which were:\n";
+	cout << "\n error: expecting 3 command-line argument (1) muN (2) E0, and (3) NG type. Instead we got " << argc << " arguments which were:\n";
 	for (j=1;j<argc;j++)
 		{
 		cout << argv[j] << ",  ";
@@ -67,8 +68,9 @@ if (argc != 3)
 	cout << "\n exiting\n\n";
 	exit(1);
 	}
-int TASKID    = atoi(argv[1]); //---atof is for floats and doubles.
-string NGtype = argv[2];
+muN_input     = atof(argv[1]); 
+E0            = atof(argv[2]); //---atof is for floats and doubles.
+string NGtype = argv[3];
 
 //----------------------retrieve input data-------------------------------
 
@@ -89,11 +91,14 @@ string BZflag; //-----flag to determine which reactions are weighted by boltzman
 
 fin  >> L;			// size of the system after coarse-graining (therefore size of max void.)
 fin  >> t0 >> t1;		// initial time step, termination time.
+fin  >> a;			// size of the footprint
 
-fin  >> muN_input; 	// chemical potential -there is no coarse-graining in this framework.
-fin  >> a >> E0;	// size of the footprint
+//--NB: removed the read-in of E0 and muN_input, they are now command-line inputs.
 
-fin  >> shouldplotvoiddist >> shouldplotrhos;		// boolean should we print the void dist profiles.
+fin  >> shouldplotvoiddist >> shouldplotrhos >> should_check_neg;		// boolean should we print the void dist profiles.
+
+fin  >> should_import_IC   >> should_export_IC >> neg_checkpoint;
+
 fin  >> BZflag;
 fin  >> parity_check;
 fin  >> pathout;
@@ -101,10 +106,16 @@ fin.close();
 
 if (parity_check != 88855888)
 	{
-	cout << "\n ERROR in ordering of input parameters. exiting. \n"; 
+	cout << "\n ERROR: in ordering of input parameters. exiting. \n"; 
 	exit(1);
 	}
-
+/*
+if ( int(should_export_IC) + int(should_import_IC) !=1)
+	{
+	cout << "\n ERROR: precisely one of import/export should be true. \n"; 
+	exit(1);
+	}
+*/
 //----------------------------------------------------------
 string BZ;
 if (BZflag =="boltzmann_on_uphill")
@@ -148,7 +159,10 @@ else
 //---------------------------------------------------------
 
 
-muN = muN_input + 1.0*(TASKID-1); // ---stagger the muN values according to input for parallelization.
+//---   don't use this anymore: muN is now a direct command-line input. 
+//---   muN = muN_input + 1.0*(TASKID-1); 
+muN = muN_input; 
+//---   this used to be how I would stagger the muN values according to input for parallelization.
 
 //---this is done for both SNG and HNG cases.
 
@@ -214,11 +228,11 @@ ofstream v2pot_output;
 
 *flog << "\n for this run, muN=" << muN;
 *flog << "\n muN_input = " << muN_input;
-*flog << "\n system size, L=" << L;
+*flog << "\n a = " << a << ", E0 = " << E0;
+*flog << "\n before any IC imports, input file specifies L=" << L;
 *flog << "\n NGtype = " << NGtype;
 *flog << "\n t0 = " << t0 ;
 *flog << "\n t1 = " << t1 ;
-*flog << "\n a = " << a << ", E0 = " << E0;
 *flog << "\n shouldplotvoiddist = " << shouldplotvoiddist << ", shouldplotrhos = " << shouldplotrhos;
 *flog << "\n BZflag =" << BZflag << endl;
 
@@ -232,12 +246,12 @@ rates_times[3] = muN;
 rates_times[4] = E0;
 
 
-int sizes[2];
+int sizes[3];
 sizes[0] = L;
 sizes[1] = a;	//---the finite size of the particles.
+sizes[2] = neg_checkpoint; //--- the point at which we look for negatives to cut off the simulation.
 
-
-bool B[8];
+bool B[11];
 B[0] = shouldplotvoiddist;
 B[1] = shouldplotrhos;
 B[2] = HNG;
@@ -246,6 +260,10 @@ B[4] = LNG;
 B[5] = boltzmann_on_add;
 B[6] = boltzmann_on_removal;
 B[7] = boltzmann_on_uphill;
+B[8] = should_check_neg;
+B[9] = should_import_IC;
+B[10] = should_export_IC;
+
 
 //------------------------------------------------------------------------
 
@@ -253,76 +271,86 @@ ODEdat* P;   //----'P' is simply our catch-all data structure.
 ofstream *foutmain;
 ofstream *maxrhovals;
 
-clear_charray(cpath, charlength );
-sprintf(cpath, "%sovershootdat-%sBZ%s_E0_maxrho_finalrho.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str());
-maxrhovals = new ofstream(cpath);	
+if( ! should_export_IC)
+	{
+	clear_charray(cpath, charlength );
+	sprintf(cpath, "%sovershootdat-%sBZ%s_muN_E0_maxrho_finalrho.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str());
+	maxrhovals = new ofstream(cpath);	
+	}
 
-
-double dE0        = 0.5;
-double minE0      = 0.5;
-int num_E0_sample = 30;
 // ----------------- @@@ HERE IS WHERE WE SHOULD INSERT REPETITION OVER EPSILON SCAN. -----------
 
-int i=0;
-for(i=0;i<num_E0_sample; i++ )
-	{
-	rates_times[4] = minE0 + double(i) * dE0;
-
-	P=new ODEdat(rates_times, sizes, B, pathout);   // ---THE 2-BODY INTERACTION IS CALCULATED 
+P=new ODEdat(rates_times, sizes, B, pathout);   // ---THE 2-BODY INTERACTION IS CALCULATED 
 						// ---AND ASSIGNED IN THE CONSTRUCTOR.
 
-	//------------------------------------------------------------------------------------------
-	if(SNG || LNG)
-		{//--------just output the potential to file to take a look at it
-	
-		if( L < 5*a )
-			{
-			cout << "\n WARNING: the system size you have chosen is less than 5 times the particle size ";
-			}
+//------------------------------------------------------------------------------------------
+if(SNG || LNG)
+	{//--------just output the potential to file to take a look at it
 
-		//-----------------------TEST PLOT TO SEE WHAT THE POTENTIAL LOOKS LIKE --------------
-		clear_charray(cpath, charlength );
-	
-		sprintf(cpath, "%sv2%spotentialfull_E0_%lf_a_%d.txt",pathout.c_str(),NGtype.c_str(),P->E0,a);
-		v2pot_output.open(cpath);
-		for(j=0;j< a;j++)
-			{v2pot_output << (j+1) << "\t" << P->v2[j] << endl ;}	
-		v2pot_output.close();
-		//---------------   TEST PLOT FINISHED HERE    ----------------------------*/
+	if( P->L < 5*a )
+		{
+		cout << "\n WARNING: the system size you have chosen is less than 5 times the particle size ";
 		}
+
+	//-----------------------TEST PLOT TO SEE WHAT THE POTENTIAL LOOKS LIKE --------------
+	/*
+	clear_charray(cpath, charlength );
+
+	sprintf(cpath, "%sv2%spotentialfull_E0_%lf_a_%d.txt",pathout.c_str(),NGtype.c_str(),P->E0,a);
+	v2pot_output.open(cpath);
+	for(j=0;j< a;j++)
+		{v2pot_output << (j+1) << "\t" << P->v2[j] << endl ;}	
+	v2pot_output.close();
+		//---------------   TEST PLOT FINISHED HERE    ----------------------------
+	*/
+	}
+
 	//------------------------------------------------------------------------------------------
 
 
-	(*P).log = flog;
+(*P).log = flog;
+
+*flog << "\n After ODEdat constructor, Llim is NOW set to " << P->L << endl;
+
+//------------read in parameters from previous iteration--------------
+
+clear_charray(cpath, charlength );
+if(should_export_IC)
+	{
+	sprintf(cpath, "%svoiddat%sBZ%s-initseg_E0-%.2f_muN-%.2f_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0,P->muN);
+	}
+	else
+	{
+	sprintf(cpath, "%svoiddat%sBZ%s-finalseg_E0-%.2f_muN-%.2f_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0,P->muN);
+	}
 
 
-	//------------read in parameters from previous iteration--------------
+foutmain = new ofstream(cpath);	
 
-	clear_charray(cpath, charlength );
-	sprintf(cpath, "%svoiddat%sBZ%s_E0-%.1f_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0);
-	foutmain = new ofstream(cpath);	
 	// this is what gets plotted:
 	// *foutmain << t << "\t" << ((*P).rho)/P->L) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
 	//--------------------------------
 
 
-	test_result=time_go(P, foutmain);
+test_result=time_go(P, foutmain);
 
 	// *flog << "\n upon completion: L=" << L << " rho=" << "; sigma=" << P->std_dev << "; mu="<<P->mean <<"; tf=" << P->t;
 
 
-	cout << "\n upon completion, system density was:" <<  (P->rho)  << " at time" << P->t;
-	cout << "\n void numerics program complete. exiting successfully.\n";
+cout << "\n upon completion, system density was:" <<  (P->rho)  << " at time" << P->t;
+cout << "\n void numerics program complete. exiting successfully.\n";
 	
-	*maxrhovals << (P->E0) << " \t " << (P->maxrho/P->L)  << " \t " << (P->rho/P->L) << endl; 
-
-	//-------------------------- CLOSE FILES AND CLEAN UP MEMORY ---------------------
-	(*foutmain).close();
-	delete foutmain;
-
-
-	delete P;
+if( ! should_export_IC)
+	{
+	*maxrhovals  << (P->muN) << " \t " << (P->E0) << " \t " << (P->maxrho/P->L)  << " \t " << (P->rho/P->L) << endl; 
 	}
+//-------------------------- CLOSE FILES AND CLEAN UP MEMORY ---------------------
+(*foutmain).close();
+delete foutmain;
+
+
+delete P;
+
 
 //---------------- @@@ DOWN TO HERE ---------------------
 //--------------------------------------------------------------------------------

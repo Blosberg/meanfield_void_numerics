@@ -25,7 +25,6 @@
 #include <gsl/gsl_sf_log.h>
 
 
-
 //------------------------------------------
 #include "void_numerics.h"
 //  #include "void.h"
@@ -58,32 +57,23 @@ double rho_t=0.0, rho_old=0.0, t_old=0.0, rhodot_anal=0.0, rhodot_num=0.0;
 //----------set up /initialize the array --------------
 double V[NV];
 for(i=0;i<=NV;i++)
-	V[i]=0.0;
+	V[i]=P->V_IC[i]; //---the constructor sets up the initial V array, and then V_IC is not used.
+			 //--- without an import setting, this is just all zeros except for at 
 
-//---------------------------INITIALIZE THE ARRAY ------------------------------
-// (*P).initialize_V(init,V); //---init is the size of the voids you want to start with.
-
-V[P->L]=1.0; //----just set the whole system to completely empty for the beginning.
+double t = P->t; //--- likewise 't' value may be imported from an unfinished run. 
+		 //--- Either way it's set in the P constructor.
 
 //---------------------------------------------------------------------------- 
 
 //--------------  document the potential in the log file.  ------------------------
 *P->log << "\n-------------------------------------------"; 
-/*
-*P->log << "\n the two-body is of size " << P->size_v2 << ", and is as follows: \n ";
-
-for (i=0;i< P->size_v2;i++)
-	{
-	*P->log << i << " \t " <<  P->v2[i] << " \t " << P->Bzman_v2[i] << endl;
- 	}
-*P->log << "\n-------------------------------------------"; 
-*/
 
 bool shouldprint=false;
 //--------------SET UP THE NECESSARY dE evolution parameters--------------	
 const gsl_odeiv_step_type * T = gsl_odeiv_step_rkf45;
 
-double h = P->t0;
+double h = P->t0;	// t0 is not changed from the input file in the constructor 
+			// regardless of IC condition. This is just how large we step initially.
 gsl_odeiv_step    * s      =  gsl_odeiv_step_alloc (T, NV);
 gsl_odeiv_control * con    =  gsl_odeiv_control_y_new (h,h);
 gsl_odeiv_evolve  * e      =  gsl_odeiv_evolve_alloc (NV);
@@ -98,17 +88,18 @@ int status=0;
 (*P->log) << "\n just before beginning time evolution, t1 is =" << P->t1 << endl;
 
 long int step=0;
-double t=0.0;
 double empty_space;
 
-const double Np10_rho =30; //---this is the resolution cut-off for plotting
+const double Np10_rho =30; //---this is the resolution cut-off for plotting FOR THE DENSITY CURVE
+			   //--- IT HAS A DIFFERENT MEANING FROM THE Np10 that we use for the void dists.
+
 const double deltaspacing = gsl_sf_log(10)/Np10_rho; //steps with lower resolution than this don't get plotted
 
 
 rho_t	   = (*P).get_rho_anal(V);
 P->step    = 0;
 
-double t_lastplot=h/10.0; //---this should ensure that the first point gets plotted
+double t_lastplot = t+h/10.0; //---this should ensure that the first point gets plotted
 
 while (t < P->t1)
 	{ 
@@ -165,6 +156,17 @@ while (t < P->t1)
 	//----these don't get printed with the same frequency as the filling rates below
 	//-----track the probabilities------------
 
+	if ( P->should_check_neg )
+		{
+		for(i=0;i<=P->L;i++)
+			{
+			if(V[i] < 0.0)
+				{
+				P->has_been_neg[i] = true;
+				}
+			}
+		}
+
 	if( P->shouldplotrhos && ( gsl_sf_log(t/t_lastplot) > deltaspacing ) ) // this is for hig res plots -use this one for the single timeline plot option.
 		{
 		t_lastplot = t; //---update the current "last point plotted"
@@ -174,6 +176,13 @@ while (t < P->t1)
 
 		}
 
+    if( P->should_export_IC &&  t>t_export)
+	{
+	P->export_IC(V);
+	(*P->log) << "\n break condition encountered.";
+	(*P->log) << " Exporting current V-distribution, and terminating run at t= " << P->t << endl;
+	break;
+	}
 
     }//================================================================-----------------------------
 //finished while loop (i.e. t has reached t1)
