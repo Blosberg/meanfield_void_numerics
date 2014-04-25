@@ -1,5 +1,7 @@
 //---------------------------------------------------------------------------------------------
-// ---last updated on  Sun Apr 13 23:34:52 CEST 2014  by  bren  at location  bren-Desktop
+// ---last updated on  Fri Apr 25 17:08:48 CEST 2014  by  ga79moz  at location  TUM , murter
+
+//  changes from  Fri Apr 25 17:08:48 CEST 2014 : optimized the process by iteratively cutting off large voids that have gone negative. cutoff is in func_SLNG"
 
 //  changes from  Sun Apr 13 23:34:52 CEST 2014 : modified the script for explicitly-sized particles (i.e. suitable for dimers, trimers, etc., no longer just coarse-grained full-sized Nucl's.)
 //---------------------------------------------------------------------------------------------
@@ -103,13 +105,12 @@ double t_lastplot = t+h/10.0; //---this should ensure that the first point gets 
 
 while (t < P->t1)
 	{ 
-	step ++;
+//	step ++;
 	P->t = t;
 
-	P->attempt = 0;
-
-	t_old = t;
-	rho_old =  (*P).get_rho_anal(V);//=rho_t;
+//	P->attempt = 0;
+//	t_old = t;
+//	rho_old =  (*P).get_rho_anal(V);//=rho_t;
 
 	if(P->HNG)
 		{
@@ -135,7 +136,6 @@ while (t < P->t1)
 	rho_t	    = (*P).get_rho_anal(V);
 	empty_space = (*P).get_empty_space(V);
 	dummy       = (*P).get_mean_stddev(V);
-
 	rhodot_num  = (rho_t-rho_old)/(t-t_old);
 	P->t = t;
 
@@ -158,32 +158,40 @@ while (t < P->t1)
 
 	if ( P->should_check_neg )
 		{
-		for(i=0;i<=P->L;i++)
+
+		while( V[P->phys_bound] < 0.0 ) 
 			{
-			if(V[i] < 0.0)
+			P->has_been_neg[P->phys_bound] = true;
+			V[P->phys_bound] 	       =  0.0; //--- hard set it to zero and don't worry about it any more. the f's will all be zero too.
+			P->phys_bound--;
+			
+			if(P->phys_bound < 2*P->a)
 				{
-				P->has_been_neg[i] = true;
+				cout << "\n ERROR: phys_bound = " << P->phys_bound << " is getting suspiciously small at t=" << P->t << endl;
+				exit(1);
 				}
 			}
 		}
 
-	if( P->shouldplotrhos && ( gsl_sf_log(t/t_lastplot) > deltaspacing ) ) // this is for hig res plots -use this one for the single timeline plot option.
+	if( P->shouldplotrhos && ( gsl_sf_log(t/t_lastplot) > deltaspacing ) ) 
 		{
+		// output to the t vs. rho file.
 		t_lastplot = t; //---update the current "last point plotted"
-
+		rho_t	    = (*P).get_rho_anal(V);
+		dummy       = (*P).get_mean_stddev(V);
 		//---------------------OUTPUT TO FILE ----THIS IS WHERE WE PLOT THE FILLING -------------------------
 		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
 
 		}
-
-    if( P->should_export_IC &&  t>t_export)
+/*
+    if( P->should_export_IC &&  t> P->t_export)
 	{
 	P->export_IC(V);
 	(*P->log) << "\n break condition encountered.";
 	(*P->log) << " Exporting current V-distribution, and terminating run at t= " << P->t << endl;
 	break;
 	}
-
+*/
     }//================================================================-----------------------------
 //finished while loop (i.e. t has reached t1)
 

@@ -1,5 +1,7 @@
 /*  void_numerics.h--class def's and func decl's (func definitions are in another .h file)
-// ---last updated on  Sun Apr 13 23:34:52 CEST 2014  by  bren  at location  bren-Desktop
+// ---last updated on  Fri Apr 25 17:08:48 CEST 2014  by  ga79moz  at location  TUM , murter
+
+//  changes from  Fri Apr 25 17:08:48 CEST 2014 : optimized the process by iteratively cutting off large voids that have gone negative. cutoff is in func_SLNG"
 
 //  changes from  Sun Apr 13 23:34:52 CEST 2014 : modified the script for explicitly-sized particles (i.e. suitable for dimers, trimers, etc., no longer just coarse-grained full-sized Nucl's.)
 */
@@ -20,7 +22,6 @@ using namespace std;
 
 const bool irreversible=false;
 
-
 //******************************************************************
 int space_tpoints_linear(const double tmin, const double tmax, const int nbins, double * tx);
 int space_tpoints_logarithmic(const double t0, const double tf, const int nbins, double * tx);
@@ -38,6 +39,11 @@ double * v2; 		//----- v2[x]       = the energetic potential of two particles wi
 double * Bzman_v2;	//----- Bzman_v2[x] = exp(-v2[x]), the boltzmann factor thereof.
 int size_v2;		// the number of points in the v2 potential (beyond which it is assumed v2=0)
 double * xcoarse;
+
+bool should_check_neg;	//--- should we spend the time to check whether everything is neg?
+bool * has_been_neg;	//--- array of the void sizes. if they have been negative 
+			//--- at some point, then the data is garbage.
+double *V_IC;
 
 double rho;		//---the average density.
 double maxrho;		//--- the maximum density observed within a single run.
@@ -57,19 +63,26 @@ double rp; // = r-'plus'  -the on rate.
 double r;  // = r+/r-
 double muN;
 
-int a; //---the range of interaction.
-int L; //---the size of the system /max void.
+int a; 		//--- the range of interaction (i.e. particle size).
+int L; 		//--- the size of the system /max void.
+int phys_bound; //--- the max size that's still physically sensible (larger ones have gone neg)
 
 double E0;
 double t;
 double t0, t1; //--the initial step time, and the final simulation time.
 
-bool* printq;		//----the queue of plots to make.
+bool*   printq;		//----the queue of plots to make.
 double* tpoints_vdist;	//----the array of points in time to make this plot.
 int     total_obs_vdist;	//----the number of plots of the void distribution we should make.
-bool  shouldplotvoiddist; //---whether or not we should plot the void distribution at various times.
+bool    shouldplotvoiddist; //---whether or not we should plot the void distribution at various times.
+
 bool  shouldplotrhos;
-int   plotnum; //----the current index of the void-distribution plot.
+bool  should_import_IC;
+bool  should_export_IC;
+double t_export; //--- point at which we look for whether the value is negative to cut off.
+
+int   plotnum; 			//----the current index of the void-distribution plot.
+int   plotnum_initial;  	//--- the offset, in case we are importing IC's
 
 char cpath;   // [charlength];
 
@@ -97,6 +110,11 @@ double get_empty_space(const double * V);	//--- the fraction of space unoccupied
 double get_rho_anal(const double * V);		//--- the density per system length
 double get_C(const double * V);			//--- allocates the two terms of the conserved quantity
 double get_rhostar(const double * V);		//--- the normalization factor on the convolution term to impose conservation.
+
+
+int import_IC(void);		//---- import the void dists and t, rho.
+int export_IC(double * V);	//---- export the same.
+
 
 //! double get_rhodot_anal(const double * V);
 

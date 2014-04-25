@@ -1,5 +1,7 @@
 //---void.h -function definitions for the void numerics calculation.
-// ---last updated on  Sun Apr 13 23:34:52 CEST 2014  by  bren  at location  bren-Desktop
+// ---last updated on  Fri Apr 25 17:08:48 CEST 2014  by  ga79moz  at location  TUM , murter
+
+//  changes from  Fri Apr 25 17:08:48 CEST 2014 : optimized the process by iteratively cutting off large voids that have gone negative. cutoff is in func_SLNG"
 
 //  changes from  Sun Apr 13 23:34:52 CEST 2014 : modified the script for explicitly-sized particles (i.e. suitable for dimers, trimers, etc., no longer just coarse-grained full-sized Nucl's.)
 
@@ -30,6 +32,7 @@
 
 using namespace std;
 
+
 //****************************************************************
 const int Np10 = 10; 		// Resolution of time-samples taken. this is probably high enough resolution on
 
@@ -39,14 +42,17 @@ ODEdat::ODEdat(const double * rates_times, const  int * sizes, const bool * B, c
 {
 int i; 
 //------------------------------------
-t0  = rates_times[0];
-t1  = rates_times[1];
-rm  = rates_times[2];
-muN = rates_times[3];
-E0  = rates_times[4];
+t0  = rates_times[0];	//---this is always the same: it sets the step-size. 
+			// ONLY t is changed based on read-in condition.
+t1      = rates_times[1];
+rm      = rates_times[2];
+muN     = rates_times[3];
+E0      = rates_times[4];
+t_export = rates_times[5];
 
-L        = sizes[0];
-a        = sizes[1];
+L              = sizes[0];	phys_bound = L;	//--- initially.
+a              = sizes[1];
+
 
 shouldplotvoiddist   = B[0];
 shouldplotrhos       = B[1];
@@ -57,6 +63,9 @@ LNG                  = B[4];
 boltzmann_on_add     = B[5];
 boltzmann_on_removal = B[6];
 boltzmann_on_uphill  = B[7];
+should_check_neg     = B[8];
+should_import_IC     = B[9];
+should_export_IC     = B[10];
 
 if( ( int(boltzmann_on_add)+int(boltzmann_on_removal) + int(boltzmann_on_uphill) ) != 1)  
 	{
@@ -77,13 +86,38 @@ if ( HNG && SNG)
 
 pathout = pathout_in;
 plotnum=0;
+plotnum_initial=0; 	//--- this will be over-written if import_IC gets called.
 attempt=0;
 
 mean 		 = 0.0;
 std_dev 	 = 0.0;
 
+//---------------- IMPORT/EXPORT CRITERIA GOES HERE ----------------------
+
+t=0;	//--- this will be overwritten inside import_IC() if we call it.
+
+if(should_import_IC)
+	{
+	import_IC(); // this will automatically change 'L' and initialize V_IC. Everything else should remain the same.
+	}
+else
+	{//--- no IC to import, then just set the whole system to empty.
+	V_IC = new double[L+1];
+	for(i=0;i<=L;i++)
+		{
+		V_IC[i]=0.0;
+		}
+        V_IC[L]=1.0; 
+	}
+
+
 //--------------------ALLOCATE AND ASSIGN THE 2-BODY INTERACTION -------------------
-xcoarse  = new double[L+1];
+xcoarse       = new double[L+1];
+has_been_neg  = new bool[L+1]; 
+
+
+has_been_neg[4]=true; // ---just testing my own initialization script.
+init_array( has_been_neg , L+1, false );
 
 //--------------coarse graining here:--------------------------------------
 
@@ -98,15 +132,12 @@ if(SNG || LNG )
 	Bzman_v2 = new double[L+1];
 	v2       = new double[L+1];
 
-	for(i=0;i<=L;i++)
-		{
-		v2[i]       = 0.0;
-		Bzman_v2[i] = 1.0;
-		xcoarse[i]  = 0.0;
-		}
+	init_array(v2      , L+1, 0.0);
+	init_array(Bzman_v2, L+1, 0.0);
+	init_array(xcoarse , L+1, 0.0);	//---initialization functions are defined in "bren_lib.h"
 
-	for(i=0;i<a;i++)
-		{v2[i]=0.0;}
+	init_array( v2 , a, 0.0);
+
 	if(SNG)
 		{
 		VNN_SNG_calc_smallp(v2, L, a, E0); 
@@ -144,11 +175,34 @@ else if (HNG)
 	-------------------------------------------------------------------------*/
 	}
 
-
-
 //-------------------- logarithmic spacing of observation points -------------------------
 
-total_obs_vdist = ceil(   Np10* log10( t1/t0)  );
+double dummy_t0             = pow(10, floor(log10(t+t0)) );
+int    dummy_num_t_points   = ceil(   Np10* (log10( t1/dummy_t0) ) )  ;
+
+double * dummy_t_points     = new double[dummy_num_t_points];
+init_array( dummy_t_points , dummy_num_t_points, 0.0);
+
+space_tpoints_logarithmic( dummy_t0, t1, Np10 , dummy_num_t_points, dummy_t_points);
+
+bool found=false;
+for(i=0;i<Np10;i++)
+	{
+	if (t <= dummy_t_points[i])
+		{
+		found = true;
+		break;
+		}
+	}
+if ( found == false)
+	{
+	cout  << "\n ERROR: cannot find t0>dummyt0[i]. Exiting. \n ";
+	exit(1);
+	}
+
+int dummy_num_cutoff = i;
+
+total_obs_vdist = dummy_num_t_points-i;	//--- cut off the leading points that come before t0
 
 printq        = new bool[total_obs_vdist];
 tpoints_vdist = new double[total_obs_vdist];
@@ -156,10 +210,15 @@ tpoints_vdist = new double[total_obs_vdist];
 for(i=0;i<total_obs_vdist;i++)
 	{
  	printq[i]=false;
-	tpoints_vdist[i]=0.0;
+	tpoints_vdist[i] = dummy_t_points [ i + dummy_num_cutoff] ;
+	if ( i + dummy_num_cutoff >= dummy_num_t_points )
+		{ 
+		cout << "\n ERROR: reading off array end dummy_t_points."; exit(1); 
+		}
 	}
 
-space_tpoints_logarithmic(t0, t1, Np10 , total_obs_vdist, tpoints_vdist );
+//----  @@@ no longer simply space from t0 like this: 
+//----  space_tpoints_logarithmic(t0, t1, Np10 , total_obs_vdist, tpoints_vdist );
 //----------------------------------------------------------------------------------------
 
 
@@ -184,6 +243,8 @@ if(SNG || LNG )
 
 delete [] printq;
 delete [] tpoints_vdist;
+delete [] has_been_neg;
+delete [] V_IC;		//---this is ALWAYS created. It just happens to be empty if there's no import.
 
 }
 
@@ -353,23 +414,23 @@ clear_charray(cpath, charlength );
 //----------------------------------------------------------------
 if( plotnum < 10)
 	{
-	sprintf(cpath, "%sVdist_x_VpL_Vprob_0000%d.txt", pathout.c_str(),plotnum);
+	sprintf(cpath, "%sVdist_x_VpL_Vprob_0000%d.txt", pathout.c_str(),plotnum+plotnum_initial);
 	}
 else if(plotnum < 100)
 	{
-	sprintf(cpath, "%sVdist_x_VpL_Vprob_000%d.txt", pathout.c_str(),plotnum);
+	sprintf(cpath, "%sVdist_x_VpL_Vprob_000%d.txt", pathout.c_str(),plotnum+plotnum_initial);
 	}
 else if(plotnum < 1000)
 	{
-	sprintf(cpath, "%sVdist_x_VpL_Vprob_00%d.txt", pathout.c_str(),plotnum);
+	sprintf(cpath, "%sVdist_x_VpL_Vprob_00%d.txt", pathout.c_str(),plotnum+plotnum_initial);
 	}
 else if(plotnum < 10000)
 	{
-	sprintf(cpath, "%sVdist_x_VpL_Vprob_0%d.txt", pathout.c_str(),plotnum);
+	sprintf(cpath, "%sVdist_x_VpL_Vprob_0%d.txt", pathout.c_str(),plotnum+plotnum_initial);
 	}
 else 
 	{
-	sprintf(cpath, "%sVdist_x_VpL_Vprob_%d.txt", pathout.c_str(),plotnum);
+	sprintf(cpath, "%sVdist_x_VpL_Vprob_%d.txt", pathout.c_str(),plotnum+plotnum_initial);
 	}
 
 ofstream fvout(cpath);
@@ -385,7 +446,7 @@ double alpha_CG = gsl_sf_log( 1 + coverage/(a*(1.0-coverage) )  );
 //--------------------------PLOT THE VOID DISTRIBUTION AS A FUNCTION OF X ------------------------
 for(i=0;i<L;i++)
 	{
-	fvout << (i+1) << " \t " << V[i]/(L) << " \t " << V[i]/rho << endl;
+	fvout << (i+1) << " \t " << V[i]/(L) << " \t " << V[i]/rho << " \t " << has_been_neg[i] << endl;
 	}
 //---------------NOW THE TIME ASSOCIATED WITH THIS PARTICULAR plotnum iteration------------------
 
@@ -483,15 +544,15 @@ P->t = t;		// the current time.
 double rm = P->rm;
 double rp = P->rp;	// rp/m = 'plus/minus' --the on off rates.
 
+int  phys_bound = P->phys_bound;
+
 //--------------------  initialize  ----------------------
 
-for(j=0; j<=L ;j++)	
-	{ 
-	f[j] = 0.0;
-	}
+init_array( f,  L+1, 0.0 );
 
 
-(*P).get_rho_anal(V);  //---returns exactly the number of particles in the system -WE DON'T WORRY ABOUT COARSE-GRAINING HERE!
+
+// (*P).get_rho_anal(V);  //---returns exactly the number of particles in the system -WE DON'T WORRY ABOUT COARSE-GRAINING HERE!
 (*P).get_rhostar(V); 
 (*P).get_empty_space(V);
  
@@ -499,28 +560,40 @@ for(j=0; j<=L ;j++)
 
 //============= here handle finite-size special cases =================================================
 
-//----completely empty system  		0|---------------------------------|L	
-f[L]= -1*rp*L*V[L] + rm*V[L-kn] ;	//--only terms 3,4 survive here.
-
-
-//----single particle in system         0|------------|<-kn->|--------------|L	
-f[L-kn]  = -1*rm*V[L-kn] + rp*L*V[L];     //---term 1 only has a single rm-removal rate., 
-					// term 2 has full range of 'L' binding sites.
-
-if ( (L-2*kn+1) >=1)
-	f[L-kn] += -rp*(L-2*kn+1)*V[L-kn];    //---term 3 : same as canonical case.
-
-//----term (4) ---creation of void 'm' from desorption of neighbour with next void adding up to m.   
-
-for(j=0; j<= (L-2*kn);j++)	 
-	{ 
-	if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) //---- float-error catch (in case rho=0)
-		{
-		f[L-kn] += (rm/(P->rhostar))*V[j]*V[L-2*kn-j];
-		}
+if( ! P->has_been_neg[L] )
+	{
+	//----completely empty system  		0|---------------------------------|L	
+	f[L] = -1*rp*L*V[L] + rm*V[L-kn] ;	//--only terms 3,4 survive here.
 	}
-//============ done handling special finite-size cases; the rest are canonical ========================
-for(m=0; m<= (L-2*kn) ;m++)
+
+if( ! P->has_been_neg[L-kn] )
+	{
+	//----single particle in system         0|------------|<-kn->|--------------|L	
+	f[L-kn]  = -1*rm*V[L-kn] + rp*L*V[L];     //---term 1 only has a single rm-removal rate., 
+					  	  // term 2 has full range of 'L' binding sites.
+
+	if ( (L-2*kn+1) >=1)
+		{//---term 3 : same as canonical case.
+		f[L-kn] -= rp*(L-2*kn+1)*V[L-kn];    
+		}
+
+	//---- term (4) ---creation of void 'm' from desorption 
+	//---- of neighbour with next void adding up to m.   
+
+	for(j=0; j<= (L-2*kn);j++)	 
+		{ 
+		if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) //---- float-error catch (in case rho=0)
+			{
+			f[L-kn] += (rm/(P->rhostar))*V[j]*V[L-2*kn-j];
+			}
+		}
+
+	}
+
+//==== done handling special finite-size cases; the rest are canonical ===================
+//--- optimized out: for(m=0; m<= (L-2*kn) ;m++)
+
+for(m=0; ( (m<= (L-2*kn)) &&(m<=phys_bound) ) ;m++)
 	{
 	//----term(1) -particles on either side leaving.
 	f[m]=-2*rm*V[m]; 
@@ -562,6 +635,8 @@ ODEdat*  P = (ODEdat *)params;
 int i=0,j=0,m=0; //-----counter ints
 double C=0.0;
 int  L = P->L; // ----the system size.
+int  phys_bound = P->phys_bound;
+
 //---------------------------------------------------------
 P->attempt +=1;		// keep track of the number of times we've "attempted to time-step here"
 P->t = t;		// the current time.
@@ -571,12 +646,9 @@ double rp = P->rp;	// rp/m = 'plus/minus' --the on off rates.
 
 //--------------------  initialize  ----------------------
 
-for(j=0; j<=L ;j++)	
-	{ 
-	f[j] = 0.0;
-	}
+init_array( f,  L+1, 0.0 );
 
-(*P).get_rho_anal(V);  //---returns exactly the number of particles in the system
+// (*P).get_rho_anal(V);  //---returns exactly the number of particles in the system
 (*P).get_rhostar(V); 
 (*P).get_empty_space(V);
  
@@ -586,46 +658,51 @@ if( P->boltzmann_on_add)
 	{
 	//======= here handle finite-size special cases =========================
 
-	//----completely empty system  		0|---------------------------------|L	
-	f[L]= -1*rp*L*V[L]*P->Bzman_v2[L-1] + rm*V[L-1] ; //--only terms 3,4 survive here.
-
-	//----single particle in system         0|------------|<-k->|--------------|L	
-	f[L-1]  = -1*rm*V[L-1] + 1*rp*L*V[L]*P->Bzman_v2[L-1];     
-	//---term 1 only has a single rm-removal rate., 
-					// term 2 has full range of 'L' binding sites.
-	for(i=0;i<(L-1);i++)
+	if( ! P->has_been_neg[L] )
 		{
-		f[L-1] -= rp * V[L-1] * ( (P->Bzman_v2[i]*P->Bzman_v2[L-1-1-i] )/ (P->Bzman_v2[L-1]) )   ;    
-		//---term 3 : same as canonical case.
+		//----completely empty system  		0|---------------------------------|L	
+		f[L]= -1*rp*L*V[L]*P->Bzman_v2[L-1] + rm*V[L-1] ; //--only terms 3,4 survive here.
 		}
 
-	//----term (4) ---creation of void 'm' from desorption
-	//----  of neighbour with next void adding up to m.   
-
-	for(j=0; j<= (L-1-1);j++)	 
-		{ 
-		if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) 
-			{ //---- THIS IS A float-error catch (in case rho=0)
-			f[L-1] += (rm/(P->rhostar))*V[j]*V[L-1-j];
+	if( ! P->has_been_neg[L-1] )
+		{
+		//----single particle in system         0|------------|<-k->|--------------|L	
+		f[L-1]  = -1*rm*V[L-1] + 1*rp*L*V[L]*P->Bzman_v2[L-1];     
+		//---term 1 only has a single rm-removal rate., 
+					// term 2 has full range of 'L' binding sites.
+		for(i=0;i<(L-1);i++)
+			{
+			f[L-1] -= rp * V[L-1] * ( (P->Bzman_v2[i]*P->Bzman_v2[L-1-1-i] )/ (P->Bzman_v2[L-1]) )   ;    
+			//---term 3 : same as canonical case.
 			}
-		}
 
+		//----term (4) ---creation of void 'm' from desorption
+		//----  of neighbour with next void adding up to m.   
+
+		for(j=0; j<= (L-1-1);j++)	 
+			{ 
+			if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) 
+				{ //---- THIS IS A float-error catch (in case rho=0)
+				f[L-1] += (rm/(P->rhostar))*V[j]*V[L-1-j];
+				}
+			}
+		}		
 	//---- done handling special finite-size cases; the rest are canonical ==========
-	for(m=0; m< (L-1) ;m++)
+	for(m=0; ((m < (L-1)) &&(m<=phys_bound) ) ;m++)
 		{
 		//----term(1) -particles on either side leaving.
 		f[m]=-2*rm*V[m]; 
+
 		//----term (2) ---creation of void 'm' from a larger one.  
-		for(i=m+1; i<=(L-1) ;i++)	
+		for(i=m+1; (i<=(L-1) && i <= phys_bound ); i++)	// --- V'>phys_bound are all 0.
 			{ //---term 2 
 			f[m] += 2*rp*V[i] * ( (P->Bzman_v2[m]*P->Bzman_v2[i-1-m] )/ (P->Bzman_v2[i]) ); 
 			}
 
-		
 		//---term(3) disappearance of V[m] due to adsorption in its interior.	
 		for(i=0; i<=(m-1) ;i++)	
 			{ //---term 3----
-			f[m] += -rp*V[m] * ( (P->Bzman_v2[i]*P->Bzman_v2[m-1-i] )/ (P->Bzman_v2[m]) ); 
+			f[m] -= rp*V[m] * ( (P->Bzman_v2[i]*P->Bzman_v2[m-1-i] )/ (P->Bzman_v2[m]) ); 
 			}
 
 		//----term (4) ---creation of void 'm' from desorption of neighbour with next void adding up to m.   
@@ -636,7 +713,6 @@ if( P->boltzmann_on_add)
 				f[m] += (rm/(P->rhostar))*V[j]*V[m-1-j];
 				}
 			}
-
        		}//--- end the if/else special conditions of m (i.e. done with the canonical cases.)
 
 	}//-----close the "if(boltzmann_on_add)" condition
@@ -644,30 +720,41 @@ if( P->boltzmann_on_add)
 else if( P->boltzmann_on_removal)//-------------------bolztmann factors on removal--------------
 	{
 
+	//	@@@ STILL NEED TO DO THE SAME THING HERE
+
 	// N.B. the Bzman array is always exp(-v2(x)), and therefore always <=1.
 	// -in order to speed up removal, we have to DIVIDE rates by it.
 
-	//---- L ------------------------------------------	
-	f[L]= -1*rp*L*V[L] + rm*V[L-1]/(P->Bzman_v2[L-1]) ; //--only terms 3,4 survive here.
+	if( ! P->has_been_neg[L] )
+		{
+		//---- L ------------------------------------------	
+		f[L]= -1*rp*L*V[L] + rm*V[L-1]/(P->Bzman_v2[L-1]) ; //--only terms 3,4 survive here.
+		}
 
-	//---- L-1 ----------------------------------------
-	f[L-1]  = -1*rm*V[L-1]/(P->Bzman_v2[L-1]) + 1*rp*L*V[L];   //--- this includes both (1) loss due to 
+	if( ! P->has_been_neg[L-1] )
+		{
+		//---- L-1 ----------------------------------------
+		f[L-1]  = -1*rm*V[L-1]/(P->Bzman_v2[L-1]) + 1*rp*L*V[L];   //--- this includes both (1) loss due to 
 								   //--- removal and (2) creation of [L-1] 
 								   //--- from larger->addition.
 
-	f[L-1] -= rp*(L-1) * V[L-1];    //--- term 3 : same as canonical case 
+		f[L-1] -= rp*(L-1) * V[L-1];    //--- term 3 : same as canonical case 
 					 //--- equal binding possibilities everywhere.
 
-	for(j=0; j<= (L-1-1);j++)	//--- term 4 convolution 
-		{ 			//
-		if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) 
-			{ //---- THIS IS A float-error catch (in case rho=0)
-			f[L-1] += (rm/(P->rhostar))*V[j]*V[L-1-1-j] * ( (P->Bzman_v2[L-1])/ (P->Bzman_v2[j]*P->Bzman_v2[L-1-1-j] ) )    ;
+		for(j=0; j<= (L-1-1);j++)	//--- term 4 convolution 
+			{ 			//
+			if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) 
+				{ //---- THIS IS A float-error catch (in case rho=0)
+				f[L-1] += (rm/(P->rhostar))*V[j]*V[L-1-1-j] * ( (P->Bzman_v2[L-1])/ (P->Bzman_v2[j]*P->Bzman_v2[L-1-1-j] ) )    ;
+				}
 			}
 		}
-
+	
+	
 	//---- done handling special finite-size cases; the rest are canonical ==========
-	for(m=0; m< (L-1) ;m++)
+
+	//@@@ --- optimized out: for(m=0; m< (L-1) ;m++)
+	for(m=0; ((m < (L-1)) &&(m<=phys_bound) ) ;m++)
 		{
 		//----term(1) -particles on either side leaving.
 		for(i=0; i<=(L-2-m) ;i++)	
@@ -675,8 +762,10 @@ else if( P->boltzmann_on_removal)//-------------------bolztmann factors on remov
 			f[m] -= 2*rm*V[m] * (V[i]/P->rhostar) * (1/(P->Bzman_v2[m]*P->Bzman_v2[i] ))*P->Bzman_v2[i+m+1] ; 
 			}
 		//----term (2) ---creation of void 'm' from a larger one.  
+		// @@@ --- optimized out: for(i=m+1; i<=(L-1) ;i++)	
 
-		for(i=m+1; i<=(L-1) ;i++)	
+		for(i=m+1; (i<=(L-1) && i <= phys_bound ); i++)	// --- V'>phys_bound are all 0.
+
 			{ //---term 2 
 			f[m]+=2*rp*V[i]; 
 			}
@@ -884,7 +973,152 @@ result=result;
 #endif //--this ends the clause as to whether or not this symbol (i.e. this file) has been defined already.
 
 //*********************************************************************************
+int  ODEdat::import_IC(void)
+{
+int i=0;
+int  charlength=400; //--the number of characters in the string for our path.
+char cpath[charlength];
+
+int    a_imported=0, L_imported=0;
+double E0_imported  =0.0;
+double muN_imported =0.0;
+double t_imported   =0.0;
+double rho_imported =0.0;
+
+//----------------------------------------------------------------
+clear_charray(cpath, charlength );
+sprintf(cpath, "IC_import/IC_params_a-%d_muN-%.2f_eps-%.2f.txt", a, muN, E0);
+
+ifstream params_in(cpath);
+if( params_in.fail() )
+	{
+	cout << "ERROR: could not open parameter IC file named : ";
+	cout << cpath << "\n Now exiting.\n";
+	exit(1);
+	}
+
+params_in >> a_imported >> muN_imported >> E0_imported ;
+params_in >> t_imported >> rho_imported >> L_imported  ;
+params_in >> plotnum_initial;
+params_in.close();
+
+if( a_imported != a || muN_imported != muN || E0_imported != E0)
+	{
+	cout << "\n ERROR: IC import parameters incompatible with simulation. Exiting. \n";
+	*log << "\n ERROR: IC import parameters incompatible with simulation. Exiting. \n";
+ 	(*log).close(); exit(1);
+	}
+
+if( L_imported != L)
+	{
+	cout << "\n WARNING : L_imported != L from input file. \n";
+	*log << "\n WARNING : L_imported != L from input file. \n";
+	// ---- this would be a warning, but not a stop-dead error.
+	}
+
+double  V_temp[L_imported+1] ;
+int     has_been_neg_temp[L_imported+1]; 
+
+for(i=0;i<=L_imported; i++)
+	{
+	V_temp[i] = 0.0;
+	has_been_neg_temp[i] = false;
+	}
+
+//----------------------------------------------------------------
+clear_charray(cpath, charlength );
+sprintf(cpath, "IC_import/IC_vdist_a-%d_muN-%.2f_eps-%.2f.txt", a, muN, E0);
+
+ifstream vdist_in(cpath);
+if (vdist_in.fail() )
+	{
+	cout << "\n ERROR: failed to access IC import file.\n" ;
+	exit(1);
+	}
+
+i=0;
+
+vdist_in >> V_temp[i] >> has_been_neg_temp[i];
+
+while( ! vdist_in.eof() && i < L_imported+5 ) // avoid infinite loop but allow for check if i -> greater than L_imported.
+	{
+	i++;
+	vdist_in >> V_temp[i] >> has_been_neg_temp[i];
+	}
+vdist_in.close();
 
 
+if(i != L_imported+1)
+	{
+	cout << "\n ERROR: imported L does not agree with size of V_IC import.\n";
+	exit(1);
+	}
 
+//----------------------------------------
+int phys_thresh=0; 
 
+for(i=0;i<=L_imported; i++)
+	{
+	if( ! has_been_neg_temp[i] )
+		{
+		phys_thresh=i;
+		}
+	}
+//--- phys_thresh is now the last index which is ruled physical.
+//--- THIS IS THE SIZE OF THE NEW SYSTEM, AND WE MUST ALLOCATE ONE MORE FOR THE ZERO PLACE.
+
+for(i=0;i<=L_imported; i++)
+	{
+	if( ( i <= phys_thresh && has_been_neg_temp[i] )  || ( i > phys_thresh && !has_been_neg_temp[i] ) )
+		{
+		cout << "\n ERROR in configuring the physical threshold for has_been_neg.\n";
+		exit(1);
+		}
+	}
+//----------------------------------------
+
+L = phys_thresh;
+
+V_IC = new double[L+1];
+for(i=0;i<=L;i++)
+	{
+	V_IC[i] = L * V_temp[i];
+	}
+//----------------------------------------------------------------
+t   = t_imported;
+rho = rho_imported*double(L);
+
+}
+
+//*********************************************************************************
+int  ODEdat::export_IC(double * V)
+{
+int i;
+int  charlength=400; //--the number of characters in the string for our path.
+char cpath[charlength];
+
+//----------------------------------------------------------------
+clear_charray(cpath, charlength );
+sprintf(cpath, "%sIC_params_a-%d_muN-%.2f_eps-%.2f.txt", pathout.c_str(), a, muN, E0);
+
+ofstream params_out(cpath);
+
+params_out << a << " \t " << muN           << " \t " << E0 << endl;
+params_out << std::setprecision(10) << t << " \t " << rho/double(L) << " \t " << L  << endl;
+params_out << plotnum << endl;
+
+params_out.close();
+//----------------------------------------------------------------
+clear_charray(cpath, charlength );
+sprintf(cpath, "%sIC_vdist_a-%d_muN-%.2f_eps-%.2f.txt", pathout.c_str(), a, muN, E0);
+
+ofstream vdist_out(cpath);
+
+for(i=0;i<=L;i++)
+	{
+	vdist_out << V[i]/L << " \t " << has_been_neg[i] << endl;
+	}
+vdist_out.close();
+//----------------------------------------------------------------
+
+}

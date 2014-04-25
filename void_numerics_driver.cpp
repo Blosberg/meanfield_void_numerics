@@ -1,5 +1,7 @@
 /*--- VOID NUMERICS DRIVER SCRIPT -TESTS THE EQUATIONS DERIVED FOR SNG IN ANALOGY WITH REDNER -----
-// ---last updated on  Sun Apr 13 23:34:52 CEST 2014  by  bren  at location  bren-Desktop
+// ---last updated on  Fri Apr 25 17:08:48 CEST 2014  by  ga79moz  at location  TUM , murter
+
+//  changes from  Fri Apr 25 17:08:48 CEST 2014 : optimized the process by iteratively cutting off large voids that have gone negative. cutoff is in func_SLNG"
 
 //  changes from  Sun Apr 13 23:34:52 CEST 2014 : modified the script for explicitly-sized particles (i.e. suitable for dimers, trimers, etc., no longer just coarse-grained full-sized Nucl's.)
 
@@ -49,7 +51,7 @@ double interpolate_mu_from_rhoi(const double irho_target,const int w, const doub
 int main(int argc, char *argv[])
 {
 int     L=0, a=0, j=0, test_result=0; 
-int 	neg_checkpoint=0;
+double  t_export=0.0;
 //---the size of the system, # of plots to make, size of particle, size of footprint, counting index, dummy.
 double  t0, t1, rm, E0,  muN_input, muN;
 bool    shouldplotvoiddist, shouldplotrhos, HNG, SNG, LNG, should_check_neg;
@@ -97,7 +99,7 @@ fin  >> a;			// size of the footprint
 
 fin  >> shouldplotvoiddist >> shouldplotrhos >> should_check_neg;		// boolean should we print the void dist profiles.
 
-fin  >> should_import_IC   >> should_export_IC >> neg_checkpoint;
+fin  >> should_import_IC   >> should_export_IC >> t_export;
 
 fin  >> BZflag;
 fin  >> parity_check;
@@ -238,30 +240,30 @@ ofstream v2pot_output;
 
 //--------------------- SET UP PARAMETERS --------------------------------------------------
 
-double rates_times[5];
+double rates_times[6];
 rates_times[0] = t0;
 rates_times[1] = t1;
 rates_times[2] = rm;
 rates_times[3] = muN;
 rates_times[4] = E0;
+rates_times[5] = t_export;
 
-
-int sizes[3];
+int sizes[2];
 sizes[0] = L;
-sizes[1] = a;	//---the finite size of the particles.
-sizes[2] = neg_checkpoint; //--- the point at which we look for negatives to cut off the simulation.
+sizes[1] = a;	//--- the finite size of the particles.
+		//--- phy_bound should start off being the same as "L"
 
 bool B[11];
-B[0] = shouldplotvoiddist;
-B[1] = shouldplotrhos;
-B[2] = HNG;
-B[3] = SNG;
-B[4] = LNG;
-B[5] = boltzmann_on_add;
-B[6] = boltzmann_on_removal;
-B[7] = boltzmann_on_uphill;
-B[8] = should_check_neg;
-B[9] = should_import_IC;
+B[0]  = shouldplotvoiddist;
+B[1]  = shouldplotrhos;
+B[2]  = HNG;
+B[3]  = SNG;
+B[4]  = LNG;
+B[5]  = boltzmann_on_add;
+B[6]  = boltzmann_on_removal;
+B[7]  = boltzmann_on_uphill;
+B[8]  = should_check_neg;
+B[9]  = should_import_IC;
 B[10] = should_export_IC;
 
 
@@ -327,14 +329,19 @@ if(should_export_IC)
 
 foutmain = new ofstream(cpath);	
 
-	// this is what gets plotted:
-	// *foutmain << t << "\t" << ((*P).rho)/P->L) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
-	//--------------------------------
+// this is what gets plotted:
+// *foutmain << t << "\t" << ((*P).rho)/P->L) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
+//--------------------------------
 
 
-test_result=time_go(P, foutmain);
+//-------------------- THE MAIN LINE IN THIS PROGRAM IS HERE: -----------------------------------
 
-	// *flog << "\n upon completion: L=" << L << " rho=" << "; sigma=" << P->std_dev << "; mu="<<P->mean <<"; tf=" << P->t;
+			test_result=time_go(P, foutmain);
+
+//------------------------THAT WAS THE MAIN LINE IN THIS PROGRAM---------------------------------
+
+
+// *flog << "\n upon completion: L=" << L << " rho=" << "; sigma=" << P->std_dev << "; mu="<<P->mean <<"; tf=" << P->t;
 
 
 cout << "\n upon completion, system density was:" <<  (P->rho)  << " at time" << P->t;
