@@ -1,11 +1,13 @@
 #IDIR =/usr/include/
+code_repo_path=/home/t30/ger/ga79moz/grad_research_phd/project/code_repository/
+
 CC=g++
-CFLAGS  =  -ggdb -I/sw/include -I/home/b/Brendan.Osberg/grad_research_phd/project/code_repository/
+CFLAGS  =  -ggdb -I/sw/include -I${code_repo_path}
 LDFLAGS =  -L/sw/lib -lgsl -lm -lgslcblas
 
 
 
-DEPS = void_numerics.h void.h /home/b/Brendan.Osberg/grad_research_phd/project/code_repository/bren_lib.h
+DEPS = void_numerics.h void.h ${code_repo_path}bren_lib.h
 OBJ  = void_numerics_driver.obj void_numerics.obj 
 
 %.obj: %.cpp $(DEPS)

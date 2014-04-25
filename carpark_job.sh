@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -m eas
 #$ -l h_vmem=500M,s_rt=36:59:0
-#$ -t 1-10
+#$ -t 1-30
 #
 # The lines above are instructions to SGE.
 # 
@@ -13,9 +13,9 @@
 # Start batch jobs via:
 # qsub ./myjob.sh
 
-NGtype="HNG"
+NGtype="LNG"
 
-WORKDIR=./job_irhoscan_CG15_L80_BZadd_${NGtype}/job_${JOB_ID}.${SGE_TASK_ID}
+WORKDIR=./job_smallp_phasespace_v2_${NGtype}/job.${SGE_TASK_ID}
 
 # create a local directory for this job only
 if [ ! -e $WORKDIR ]; then
@@ -33,7 +33,7 @@ OLDDIR=`pwd`
 #---------COPY NECESSARY FILES OVER TO THE WORK DIRECTORY-------
 cp void_numerics.x  $WORKDIR/
 cp void_numerics.in $WORKDIR/
-cp mu_v_irho_folder/mu_v_*           $WORKDIR/
+# cp mu_v_irho_folder/mu_v_*           $WORKDIR/
 
 
 #-----------GO TO THE WORK DIRECTORY AND EXECUTE ----------------
