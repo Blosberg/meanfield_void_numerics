@@ -1,5 +1,7 @@
 //---void.h -function definitions for the void numerics calculation.
-// ---last updated on  Fri Apr 25 17:08:48 CEST 2014  by  ga79moz  at location  TUM , murter
+// ---last updated on  Sun Apr 27 21:18:49 CEST 2014  by  bren  at location  , bren-Desktop
+
+//  changes from  Sun Apr 27 21:18:49 CEST 2014 : implemented criteria to terminate the run when a maximum in the density is encountered -called "should_peakterminate"
 
 //  changes from  Fri Apr 25 17:08:48 CEST 2014 : optimized the process by iteratively cutting off large voids that have gone negative. cutoff is in func_SLNG"
 
@@ -66,6 +68,8 @@ boltzmann_on_uphill  = B[7];
 should_check_neg     = B[8];
 should_import_IC     = B[9];
 should_export_IC     = B[10];
+should_peakterminate = B[11];
+
 
 if( ( int(boltzmann_on_add)+int(boltzmann_on_removal) + int(boltzmann_on_uphill) ) != 1)  
 	{
@@ -1097,6 +1101,7 @@ int i;
 int  charlength=400; //--the number of characters in the string for our path.
 char cpath[charlength];
 
+double 	rho_t	    = get_rho_anal(V);
 //----------------------------------------------------------------
 clear_charray(cpath, charlength );
 sprintf(cpath, "%sIC_params_a-%d_muN-%.2f_eps-%.2f.txt", pathout.c_str(), a, muN, E0);
@@ -1104,19 +1109,21 @@ sprintf(cpath, "%sIC_params_a-%d_muN-%.2f_eps-%.2f.txt", pathout.c_str(), a, muN
 ofstream params_out(cpath);
 
 params_out << a << " \t " << muN           << " \t " << E0 << endl;
-params_out << std::setprecision(10) << t << " \t " << rho/double(L) << " \t " << L  << endl;
+params_out << std::setprecision(10) << t << " \t " << rho/double(L) << " \t " << coverage << " \t " << L  << endl;
 params_out << plotnum << endl;
 
 params_out.close();
 //----------------------------------------------------------------
 clear_charray(cpath, charlength );
-sprintf(cpath, "%sIC_vdist_a-%d_muN-%.2f_eps-%.2f.txt", pathout.c_str(), a, muN, E0);
+sprintf(cpath, "%sfinal_vdist_a-%d_muN-%.2f_eps-%.2f.txt", pathout.c_str(), a, muN, E0);
+// sprintf(cpath, "%sICirreva-%d_vdens_vprobdist_hasbeenneg.txt", pathout.c_str(), a);
+
 
 ofstream vdist_out(cpath);
 
 for(i=0;i<=L;i++)
 	{
-	vdist_out << V[i]/L << " \t " << has_been_neg[i] << endl;
+	vdist_out << V[i]/L << " \t " << V[i]/(rho_t) << " \t " << has_been_neg[i] << endl;
 	}
 vdist_out.close();
 //----------------------------------------------------------------

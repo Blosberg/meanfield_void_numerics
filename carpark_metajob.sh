@@ -22,7 +22,9 @@ should_check_neg="1"
 
 should_import_IC="0"
 should_export_IC="1"
-t_export="20"
+
+should_peakterminate="1"
+t_export="0.1"
 
 BZcond="boltzmann_on_add"
 parity_check="88855888"
@@ -30,7 +32,7 @@ opath="./"
 
 
 job_sub_script=carpark_jobsub_TUM.sh
-WORKDIR=./void_EQ_output_on_space/job_phasespace_a-${a}_output_${NGtype}/
+WORKDIR=./void_EQ_output_on_space/job_phasespace_peakterminated_a-${a}_output_${NGtype}/
 
 #----------------------------------------------------------------------------------------
 
@@ -68,12 +70,19 @@ echo $Llim    >  void_numerics.in
 echo $t0 $tf  >> void_numerics.in
 echo $a       >> void_numerics.in
 
-echo $should_plot_Vdist_v_t  $should_plot_rhos $should_check_neg >> void_numerics.in
-echo $should_import_IC   $should_export_IC  $t_export            >> void_numerics.in
+echo ""       >>  void_numerics.in
 
-echo  $BZflag                        >>  void_numerics.in
-echo  $parity_check                  >>  void_numerics.in
-echo  $opath                         >>  void_numerics.in
+echo $should_plot_Vdist_v_t  $should_plot_rhos $should_check_neg >> void_numerics.in
+echo $should_import_IC   $should_export_IC                       >> void_numerics.in
+
+echo $should_peakterminate   $t_export >> void_numerics.in
+
+
+echo ""                                >>  void_numerics.in
+
+echo  $BZcond                          >>  void_numerics.in
+echo  $parity_check                    >>  void_numerics.in
+echo  $opath                           >>  void_numerics.in
 
 #---------------------------------------------------------------------
 

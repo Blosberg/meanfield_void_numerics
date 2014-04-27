@@ -1,5 +1,7 @@
 //---------------------------------------------------------------------------------------------
-// ---last updated on  Fri Apr 25 17:08:48 CEST 2014  by  ga79moz  at location  TUM , murter
+// ---last updated on  Sun Apr 27 21:18:49 CEST 2014  by  bren  at location  , bren-Desktop
+
+//  changes from  Sun Apr 27 21:18:49 CEST 2014 : implemented criteria to terminate the run when a maximum in the density is encountered -called "should_peakterminate"
 
 //  changes from  Fri Apr 25 17:08:48 CEST 2014 : optimized the process by iteratively cutting off large voids that have gone negative. cutoff is in func_SLNG"
 
@@ -55,7 +57,8 @@ int   NV = P->L+1; //---NV is the number of voids to be considered (including 0)
 
 char cpath[charlength];
 int i,dummy;
-double rho_t=0.0, rho_old=0.0, t_old=0.0, rhodot_anal=0.0, rhodot_num=0.0;
+double rho_t=0.0, rho_old=0.0, rho_old2=0.0;
+double t_old=0.0, t_old2=0.0, rhodot_anal=0.0, rhodot_num=0.0, rhodot_num_old=0.0, rhodot_num_old2=0.0;
 //----------set up /initialize the array --------------
 double V[NV];
 for(i=0;i<=NV;i++)
@@ -105,13 +108,17 @@ double t_lastplot = t+h/10.0; //---this should ensure that the first point gets 
 
 while (t < P->t1)
 	{ 
-//	step ++;
 	P->t = t;
 
-//	P->attempt = 0;
-//	t_old = t;
-//	rho_old =  (*P).get_rho_anal(V);//=rho_t;
+	t_old2   = t_old;
+	rho_old2 = rho_old; //---update iteratively.
+	
+	t_old = t;
+	rho_old =  (*P).get_rho_anal(V);//=rho_t;
 
+	rhodot_num_old2 = rhodot_num_old;
+	rhodot_num_old  = rhodot_num;
+	
 	if(P->HNG)
 		{
 		status = gsl_odeiv_evolve_apply (e, con, s, &sys_HNG, &t, P->t1, &h, V);
@@ -153,9 +160,10 @@ while (t < P->t1)
 		(*P).printout_voiddist(V);
 		P->plotnum+=1;
 		}
-	//----these don't get printed with the same frequency as the filling rates below
-	//-----track the probabilities------------
-
+	
+	
+	//--------- check which V's have gone negative and eliminate them for efficiency -----------
+	
 	if ( P->should_check_neg )
 		{
 
@@ -164,14 +172,42 @@ while (t < P->t1)
 			P->has_been_neg[P->phys_bound] = true;
 			V[P->phys_bound] 	       =  0.0; //--- hard set it to zero and don't worry about it any more. the f's will all be zero too.
 			P->phys_bound--;
-			
+	
+			//--------only relevant for HNG case -----------
+			if(P->HNG)
+				{
+				if( P->phys_bound > (P->L-P->a) && P->phys_bound < (P->L) )
+					{
+					P->phys_bound = (P->L-P->a);
+					for(i=(P->L-P->a+1); i<(P->L); i++)
+						{
+						P->has_been_neg[i] = true;
+						}
+					}
+
+				if( P->phys_bound > (P->L)-2*(P->a) && P->phys_bound < ((P->L)-(P->a)) )
+					{
+					P->phys_bound = (P->L)-(2*(P->a));
+					for(i=( (P->L)-2*(P->a)+1); i<(P->L)-(P->a); i++)
+						{
+						P->has_been_neg[i] = true;
+						}
+					}
+
+				}
+			//-----------------    DOWN TO HERE   -----------
+
+			/*-------
 			if(P->phys_bound < 2*P->a)
 				{
 				cout << "\n ERROR: phys_bound = " << P->phys_bound << " is getting suspiciously small at t=" << P->t << endl;
 				exit(1);
 				}
+			-------*/
 			}
 		}
+
+	//------------------------- DONE ELIMINATING GARBAGE NEGATIVE V'S.  NOW PLOT rho v time ----------------------
 
 	if( P->shouldplotrhos && ( gsl_sf_log(t/t_lastplot) > deltaspacing ) ) 
 		{
@@ -180,23 +216,40 @@ while (t < P->t1)
 		rho_t	    = (*P).get_rho_anal(V);
 		dummy       = (*P).get_mean_stddev(V);
 		//---------------------OUTPUT TO FILE ----THIS IS WHERE WE PLOT THE FILLING -------------------------
-		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
-
+		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << (rhodot_num)/(P->L ) << endl;
+		 //removed: << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
+		 //----- we're not using the mean or std. dev.'s anymore, so don't bother with them. 
 		}
-/*
-    if( P->should_export_IC &&  t> P->t_export)
+
+	
+    if( P->should_peakterminate &&  t > P->t_export) //---dont even think about exiting until after t_export.
 	{
-	P->export_IC(V);
-	(*P->log) << "\n break condition encountered.";
-	(*P->log) << " Exporting current V-distribution, and terminating run at t= " << P->t << endl;
-	break;
+    	if( ( (P->rho) <= (rho_old) ) &&  ( (rho_old) <= (rho_old2) )   )
+    	{//----two successive steps down or nowhere in density after t_export ==> stopping.
+
+    		*foutmain << t_old2 << "\t" << (rho_old2)/(P->L ) << "\t" << (rhodot_num_old2)/(P->L ) << endl;
+    		*foutmain << t_old  << "\t" << (rho_old )/(P->L ) << "\t" << (rhodot_num_old )/(P->L ) << endl;
+    		*foutmain << t      << "\t" << (rho_t)/(P->L )    << "\t" << (rhodot_num     )/(P->L ) << endl;
+   		 
+    		if(P->should_export_IC)
+    		{
+    			P->export_IC(V);
+    		}
+    		
+    		(*P->log) << "\n break condition encountered. slope is negative.";
+	   		(*P->log) << " Exporting current V-distribution, and terminating run at t= " << P->t << endl;
+	
+	   		P->rho = -777.7*P->L;	//---to make sure we don't accidentally take this value to be an equilibrated termination point.
+    		break;
+	
+    	}
 	}
-*/
+    
     }//================================================================-----------------------------
 //finished while loop (i.e. t has reached t1)
 
-(*P->log) << "\n at the end of the simulation, " << step << " steps were taken." << endl;
-cout      << "\n at the end of the simulation, " << step << " steps were taken." << endl;
+//--we don't bother with this anymore, for efficiency. (*P->log) << "\n at the end of the simulation, " << step << " steps were taken." << endl;
+// cout      << "\n at the end of the simulation, " << step << " steps were taken." << endl;
 
        gsl_odeiv_evolve_free  (e);
        gsl_odeiv_control_free (con);

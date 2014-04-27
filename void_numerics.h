@@ -1,5 +1,7 @@
 /*  void_numerics.h--class def's and func decl's (func definitions are in another .h file)
-// ---last updated on  Fri Apr 25 17:08:48 CEST 2014  by  ga79moz  at location  TUM , murter
+// ---last updated on  Sun Apr 27 21:18:49 CEST 2014  by  bren  at location  , bren-Desktop
+
+//  changes from  Sun Apr 27 21:18:49 CEST 2014 : implemented criteria to terminate the run when a maximum in the density is encountered -called "should_peakterminate"
 
 //  changes from  Fri Apr 25 17:08:48 CEST 2014 : optimized the process by iteratively cutting off large voids that have gone negative. cutoff is in func_SLNG"
 
@@ -80,6 +82,7 @@ bool  shouldplotrhos;
 bool  should_import_IC;
 bool  should_export_IC;
 double t_export; //--- point at which we look for whether the value is negative to cut off.
+bool   should_peakterminate;	//---should we stop the run once we've hit a local max.
 
 int   plotnum; 			//----the current index of the void-distribution plot.
 int   plotnum_initial;  	//--- the offset, in case we are importing IC's

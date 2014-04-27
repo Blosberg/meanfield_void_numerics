@@ -1,5 +1,7 @@
 /*--- VOID NUMERICS DRIVER SCRIPT -TESTS THE EQUATIONS DERIVED FOR SNG IN ANALOGY WITH REDNER -----
-// ---last updated on  Fri Apr 25 17:08:48 CEST 2014  by  ga79moz  at location  TUM , murter
+// ---last updated on  Sun Apr 27 21:18:49 CEST 2014  by  bren  at location  , bren-Desktop
+
+//  changes from  Sun Apr 27 21:18:49 CEST 2014 : implemented criteria to terminate the run when a maximum in the density is encountered -called "should_peakterminate"
 
 //  changes from  Fri Apr 25 17:08:48 CEST 2014 : optimized the process by iteratively cutting off large voids that have gone negative. cutoff is in func_SLNG"
 
@@ -29,16 +31,13 @@
 #include <dirent.h>
 
 
-
 //------------------------------------------
 #include "void_numerics.h"
 #include "void.h"
 #include <bren_lib.h>
 //------------------------------------------
 
-
 using namespace std;
-
 double const pi   = 3.14159265358979323846264;
 
 
@@ -53,16 +52,30 @@ int main(int argc, char *argv[])
 int     L=0, a=0, j=0, test_result=0; 
 double  t_export=0.0;
 //---the size of the system, # of plots to make, size of particle, size of footprint, counting index, dummy.
-double  t0, t1, rm, E0,  muN_input, muN;
+double  t0, t1, rm, E0=0.0,  muN_input, muN;
 bool    shouldplotvoiddist, shouldplotrhos, HNG, SNG, LNG, should_check_neg;
-bool    boltzmann_on_uphill, boltzmann_on_add, boltzmann_on_removal, should_import_IC, should_export_IC;
+bool    boltzmann_on_uphill, boltzmann_on_add, boltzmann_on_removal, should_import_IC, should_export_IC, should_peakterminate;
 
 string  pathout;
+string NGtype;
+//--------------------'command line parameters' ---------------------------------------------------
 
-//--'command line parameters' ---------------------------------------------------
-if (argc != 4)
+if(argc <= 1)
 	{
-	cout << "\n error: expecting 3 command-line argument (1) muN (2) E0, and (3) NG type. Instead we got " << argc << " arguments which were:\n";
+	goto command_line_garbage;
+	}
+NGtype = argv[1];
+
+if( (NGtype!="SNG" && NGtype!="LNG") && (NGtype!="HNG") )
+	{
+	goto command_line_garbage;
+	}
+
+if (  ( (NGtype=="SNG"  || NGtype=="LNG" ) && argc != 4) || (NGtype=="HNG" && argc !=3)  )
+	{
+	
+	command_line_garbage:
+	cout << "\n error: unexpected number of input arguments; argc = " << argc << " \n and they were : ";
 	for (j=1;j<argc;j++)
 		{
 		cout << argv[j] << ",  ";
@@ -70,9 +83,14 @@ if (argc != 4)
 	cout << "\n exiting\n\n";
 	exit(1);
 	}
-muN_input     = atof(argv[1]); 
-E0            = atof(argv[2]); //---atof is for floats and doubles.
-string NGtype = argv[3];
+
+
+muN_input     = atof(argv[2]); 
+
+if( (NGtype=="SNG"  || NGtype=="LNG" ) )
+	{
+	E0            = atof(argv[3]); //---atof is for floats and doubles.
+	}
 
 //----------------------retrieve input data-------------------------------
 
@@ -99,12 +117,15 @@ fin  >> a;			// size of the footprint
 
 fin  >> shouldplotvoiddist >> shouldplotrhos >> should_check_neg;		// boolean should we print the void dist profiles.
 
-fin  >> should_import_IC   >> should_export_IC >> t_export;
+fin  >> should_import_IC     >> should_export_IC;
+
+fin  >> should_peakterminate >> t_export;	//---whether we should stop and export condition when we see we've hit a local max and are going down.
 
 fin  >> BZflag;
 fin  >> parity_check;
 fin  >> pathout;
 fin.close();
+
 
 if (parity_check != 88855888)
 	{
@@ -164,6 +185,10 @@ else
 //---   don't use this anymore: muN is now a direct command-line input. 
 //---   muN = muN_input + 1.0*(TASKID-1); 
 muN = muN_input; 
+
+clear_charray(cpath, charlength );
+sprintf(cpath, "%sphasespace_output_muN-%.2f_E0-%.2f/", pathout.c_str(), muN, E0);
+pathout = cpath;
 //---   this used to be how I would stagger the muN values according to input for parallelization.
 
 //---this is done for both SNG and HNG cases.
@@ -253,7 +278,7 @@ sizes[0] = L;
 sizes[1] = a;	//--- the finite size of the particles.
 		//--- phy_bound should start off being the same as "L"
 
-bool B[11];
+bool B[12];
 B[0]  = shouldplotvoiddist;
 B[1]  = shouldplotrhos;
 B[2]  = HNG;
@@ -265,6 +290,7 @@ B[7]  = boltzmann_on_uphill;
 B[8]  = should_check_neg;
 B[9]  = should_import_IC;
 B[10] = should_export_IC;
+B[11] = should_peakterminate;
 
 
 //------------------------------------------------------------------------
@@ -273,12 +299,10 @@ ODEdat* P;   //----'P' is simply our catch-all data structure.
 ofstream *foutmain;
 ofstream *maxrhovals;
 
-if( ! should_export_IC)
-	{
-	clear_charray(cpath, charlength );
-	sprintf(cpath, "%sovershootdat-%sBZ%s_muN_E0_maxrho_finalrho.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str());
-	maxrhovals = new ofstream(cpath);	
-	}
+clear_charray(cpath, charlength );
+sprintf(cpath, "%sovershootdat-%sBZ%s_muN-%.2f_E0-%.2f_maxrho_finalrho.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(), muN, E0);
+maxrhovals = new ofstream(cpath);	
+
 
 // ----------------- @@@ HERE IS WHERE WE SHOULD INSERT REPETITION OVER EPSILON SCAN. -----------
 
@@ -317,14 +341,7 @@ if(SNG || LNG)
 //------------read in parameters from previous iteration--------------
 
 clear_charray(cpath, charlength );
-if(should_export_IC)
-	{
-	sprintf(cpath, "%svoiddat%sBZ%s-initseg_E0-%.2f_muN-%.2f_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0,P->muN);
-	}
-	else
-	{
-	sprintf(cpath, "%svoiddat%sBZ%s-finalseg_E0-%.2f_muN-%.2f_t_rho_mean_stddev_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0,P->muN);
-	}
+sprintf(cpath, "%svoiddat%sBZ%s-_E0-%.2f_muN-%.2f_t_rho_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0,P->muN);
 
 
 foutmain = new ofstream(cpath);	
@@ -344,13 +361,14 @@ foutmain = new ofstream(cpath);
 // *flog << "\n upon completion: L=" << L << " rho=" << "; sigma=" << P->std_dev << "; mu="<<P->mean <<"; tf=" << P->t;
 
 
-cout << "\n upon completion, system density was:" <<  (P->rho)  << " at time" << P->t;
+cout << "\n upon completion, system density was:" <<  (P->rho/P->L)  << " at time" << P->t;
 cout << "\n void numerics program complete. exiting successfully.\n";
 	
-if( ! should_export_IC)
-	{
-	*maxrhovals  << (P->muN) << " \t " << (P->E0) << " \t " << (P->maxrho/P->L)  << " \t " << (P->rho/P->L) << endl; 
-	}
+*maxrhovals  << (P->muN) << " \t " << (P->E0) << " \t " << (P->maxrho/P->L)  << " \t " << (P->rho/P->L) << endl; 
+
+(*maxrhovals).close();
+delete maxrhovals;
+
 //-------------------------- CLOSE FILES AND CLEAN UP MEMORY ---------------------
 (*foutmain).close();
 delete foutmain;
