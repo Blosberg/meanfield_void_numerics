@@ -184,7 +184,7 @@ else if (HNG)
 double dummy_t0             = pow(10, floor(log10(t+t0)) );
 int    dummy_num_t_points   = ceil(   Np10* (log10( t1/dummy_t0) ) )  ;
 
-double * dummy_t_points     = new double[dummy_num_t_points];
+double dummy_t_points[dummy_num_t_points];
 init_array( dummy_t_points , dummy_num_t_points, 0.0);
 
 space_tpoints_logarithmic( dummy_t0, t1, Np10 , dummy_num_t_points, dummy_t_points);
@@ -269,24 +269,7 @@ string convertInt(int number)
    ss << number;//add number to the stream
    return ss.str();//return a string with the contents of the stream
 }
-//***************************************************************************
-bool DirectoryExists( const char* pzPath )
-{
-    if ( pzPath == NULL) return false;
 
-    DIR *pDir;
-    bool bExists = false;
-
-    pDir = opendir (pzPath);
-
-    if (pDir != NULL)
-    {
-        bExists = true;    
-        (void) closedir (pDir);
-    }
-
-    return bExists;
-}
 //****************************************************************
 ODEdat& ODEdat::operator= (const ODEdat& param)
 {

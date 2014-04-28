@@ -185,12 +185,6 @@ else
 //---   don't use this anymore: muN is now a direct command-line input. 
 //---   muN = muN_input + 1.0*(TASKID-1); 
 muN = muN_input; 
-
-clear_charray(cpath, charlength );
-sprintf(cpath, "%sphasespace_output_muN-%.2f_E0-%.2f/", pathout.c_str(), muN, E0);
-pathout = cpath;
-//---   this used to be how I would stagger the muN values according to input for parallelization.
-
 //---this is done for both SNG and HNG cases.
 
 int init=L;
@@ -229,7 +223,11 @@ if( L < 5*a  )
 	}
 
 
-//-------------------------- setup the log file--------------------------
+//-------------------------- setup the output directory and file --------------------------
+
+clear_charray(cpath, charlength );
+sprintf(cpath, "%sphasespace_output_muN-%.2f_E0-%.2f/", pathout.c_str(), muN, E0);
+pathout = cpath;
 
 if ( DirectoryExists( pathout.c_str()  ) )
 	{

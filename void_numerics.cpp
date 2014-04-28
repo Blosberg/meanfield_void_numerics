@@ -61,7 +61,7 @@ double rho_t=0.0, rho_old=0.0, rho_old2=0.0;
 double t_old=0.0, t_old2=0.0, rhodot_anal=0.0, rhodot_num=0.0, rhodot_num_old=0.0, rhodot_num_old2=0.0;
 //----------set up /initialize the array --------------
 double V[NV];
-for(i=0;i<=NV;i++)
+for(i=0;i<NV;i++)
 	V[i]=P->V_IC[i]; //---the constructor sets up the initial V array, and then V_IC is not used.
 			 //--- without an import setting, this is just all zeros except for at 
 
