@@ -100,18 +100,26 @@ std_dev 	 = 0.0;
 
 t=0;	//--- this will be overwritten inside import_IC() if we call it.
 
+
+int    total_obs_vdist;
+
+
+
 if(should_import_IC)
 	{
-	import_IC(); // this will automatically change 'L' and initialize V_IC. Everything else should remain the same.
+	import_IC(); // this will automatically change 'L' and phys_bound and initialize V_IC. Everything else should remain the same.
+
+	total_obs_vdist   = ceil(   Np10* (log10( t1/t) ) )  ;
 	}
 else
 	{//--- no IC to import, then just set the whole system to empty.
 	V_IC = new double[L+1];
-	for(i=0;i<=L;i++)
+	for(i=0;i<L;i++)
 		{
 		V_IC[i]=0.0;
 		}
         V_IC[L]=1.0; 
+	total_obs_vdist   = ceil(   Np10* (log10( t1/t0) ) )  ;
 	}
 
 
@@ -181,13 +189,15 @@ else if (HNG)
 
 //-------------------- logarithmic spacing of observation points -------------------------
 
-double dummy_t0             = pow(10, floor(log10(t+t0)) );
-int    dummy_num_t_points   = ceil(   Np10* (log10( t1/dummy_t0) ) )  ;
+printq        = new bool[total_obs_vdist];
+tpoints_vdist = new double[total_obs_vdist];
 
-double dummy_t_points[dummy_num_t_points];
-init_array( dummy_t_points , dummy_num_t_points, 0.0);
 
-space_tpoints_logarithmic( dummy_t0, t1, Np10 , dummy_num_t_points, dummy_t_points);
+space_tpoints_logarithmic( t, t1, Np10 , total_obs_vdist, tpoints_vdist);
+
+init_array( printq,  total_obs_vdist , false );
+
+/*** --- CANT BE BOTHERED BEING FANCY ABOUT THIS, JUST MAKE THEM EVENLY SPACED ------
 
 bool found=false;
 for(i=0;i<Np10;i++)
@@ -208,8 +218,6 @@ int dummy_num_cutoff = i;
 
 total_obs_vdist = dummy_num_t_points-i;	//--- cut off the leading points that come before t0
 
-printq        = new bool[total_obs_vdist];
-tpoints_vdist = new double[total_obs_vdist];
 
 for(i=0;i<total_obs_vdist;i++)
 	{
@@ -220,6 +228,8 @@ for(i=0;i<total_obs_vdist;i++)
 		cout << "\n ERROR: reading off array end dummy_t_points."; exit(1); 
 		}
 	}
+ -------------------------------------------------------------------------*/
+
 
 //----  @@@ no longer simply space from t0 like this: 
 //----  space_tpoints_logarithmic(t0, t1, Np10 , total_obs_vdist, tpoints_vdist );
@@ -248,7 +258,7 @@ if(SNG || LNG )
 delete [] printq;
 delete [] tpoints_vdist;
 delete [] has_been_neg;
-delete [] V_IC;		//---this is ALWAYS created. It just happens to be empty if there's no import.
+delete [] V_IC;		//---this is ALWAYS created and must always be destroyed. It just happens to be all zeros if there's no import.
 
 }
 
@@ -740,7 +750,7 @@ else if( P->boltzmann_on_removal)//-------------------bolztmann factors on remov
 	
 	//---- done handling special finite-size cases; the rest are canonical ==========
 
-	//@@@ --- optimized out: for(m=0; m< (L-1) ;m++)
+	//------- optimized out: for(m=0; m< (L-1) ;m++)
 	for(m=0; ((m < (L-1)) &&(m<=phys_bound) ) ;m++)
 		{
 		//----term(1) -particles on either side leaving.
@@ -962,7 +972,7 @@ result=result;
 //*********************************************************************************
 int  ODEdat::import_IC(void)
 {
-int i=0;
+int i=0,x=0;
 int  charlength=400; //--the number of characters in the string for our path.
 char cpath[charlength];
 
@@ -971,50 +981,33 @@ double E0_imported  =0.0;
 double muN_imported =0.0;
 double t_imported   =0.0;
 double rho_imported =0.0;
+double dummy=0.0;
 
 //----------------------------------------------------------------
 clear_charray(cpath, charlength );
-sprintf(cpath, "IC_import/IC_params_a-%d_muN-%.2f_eps-%.2f.txt", a, muN, E0);
+sprintf(cpath, "./IC_import/import_t0_rho0_muN-%.2f_eps-%.2f_a-%d.txt", muN, E0, a);
 
-ifstream params_in(cpath);
-if( params_in.fail() )
+ifstream t0_rho0_in(cpath);
+if( t0_rho0_in.fail() )
 	{
 	cout << "ERROR: could not open parameter IC file named : ";
 	cout << cpath << "\n Now exiting.\n";
 	exit(1);
 	}
 
-params_in >> a_imported >> muN_imported >> E0_imported ;
-params_in >> t_imported >> rho_imported >> L_imported  ;
-params_in >> plotnum_initial;
-params_in.close();
-
-if( a_imported != a || muN_imported != muN || E0_imported != E0)
-	{
-	cout << "\n ERROR: IC import parameters incompatible with simulation. Exiting. \n";
-	*log << "\n ERROR: IC import parameters incompatible with simulation. Exiting. \n";
- 	(*log).close(); exit(1);
-	}
-
-if( L_imported != L)
-	{
-	cout << "\n WARNING : L_imported != L from input file. \n";
-	*log << "\n WARNING : L_imported != L from input file. \n";
-	// ---- this would be a warning, but not a stop-dead error.
-	}
+t0_rho0_in >> t_imported >> rho_imported >> dummy >> L_imported  ;
+t0_rho0_in.close();
 
 double  V_temp[L_imported+1] ;
 int     has_been_neg_temp[L_imported+1]; 
 
-for(i=0;i<=L_imported; i++)
-	{
-	V_temp[i] = 0.0;
-	has_been_neg_temp[i] = false;
-	}
+init_array( V_temp,            L_imported+1, 0.0 );
+init_array( has_been_neg_temp, L_imported+1, false );
+
 
 //----------------------------------------------------------------
 clear_charray(cpath, charlength );
-sprintf(cpath, "IC_import/IC_vdist_a-%d_muN-%.2f_eps-%.2f.txt", a, muN, E0);
+sprintf(cpath, "./IC_import/import_V0dist_muN-%.2f_E0-%.2f_a-%d.txt", muN, E0 , a );
 
 ifstream vdist_in(cpath);
 if (vdist_in.fail() )
@@ -1023,48 +1016,40 @@ if (vdist_in.fail() )
 	exit(1);
 	}
 
-i=0;
+x=0;
+double Norm=0.0;
+double Norm_inc=0.0;
 
-vdist_in >> V_temp[i] >> has_been_neg_temp[i];
+int has_been_neg_check;
+double Vdenscheck=0.0, Norm_inc_check=0.0;
 
-while( ! vdist_in.eof() && i < L_imported+5 ) // avoid infinite loop but allow for check if i -> greater than L_imported.
+for(i=0;i<=L_imported;i++)
 	{
-	i++;
-	vdist_in >> V_temp[i] >> has_been_neg_temp[i];
+	vdist_in >> x >> V_temp[i] >> Norm_inc >> has_been_neg_temp[i];
+	Norm += Norm_inc;
+	if( has_been_neg_temp[i] || x!=i+1)
+		{
+		goto error_reading_input_Vdist;
+		}
 	}
+
+vdist_in >> x >> Vdenscheck >> Norm_inc_check >> has_been_neg_check;
 vdist_in.close();
 
-
-if(i != L_imported+1)
+if( !has_been_neg_check ||  Norm_inc_check != 0.0 || Vdenscheck!= 0.0 || Norm-1.0 >0.00001 || Norm-1.0 < - 0.00001 )
 	{
-	cout << "\n ERROR: imported L does not agree with size of V_IC import.\n";
+	error_reading_input_Vdist:
+	cout << "\n ERROR: SOMETHING went wrong when reading in the Vdistribution file in import_IC. Exiting. \n";
 	exit(1);
 	}
 
-//----------------------------------------
-int phys_thresh=0; 
-
-for(i=0;i<=L_imported; i++)
-	{
-	if( ! has_been_neg_temp[i] )
-		{
-		phys_thresh=i;
-		}
-	}
-//--- phys_thresh is now the last index which is ruled physical.
+//--- L_imported is now the last index which is ruled physical.
 //--- THIS IS THE SIZE OF THE NEW SYSTEM, AND WE MUST ALLOCATE ONE MORE FOR THE ZERO PLACE.
 
-for(i=0;i<=L_imported; i++)
-	{
-	if( ( i <= phys_thresh && has_been_neg_temp[i] )  || ( i > phys_thresh && !has_been_neg_temp[i] ) )
-		{
-		cout << "\n ERROR in configuring the physical threshold for has_been_neg.\n";
-		exit(1);
-		}
-	}
 //----------------------------------------
 
-L = phys_thresh;
+L           = L_imported;
+phys_bound  = L_imported;
 
 V_IC = new double[L+1];
 for(i=0;i<=L;i++)
@@ -1083,30 +1068,25 @@ int  ODEdat::export_IC(double * V)
 int i;
 int  charlength=400; //--the number of characters in the string for our path.
 char cpath[charlength];
-
+double dummy = 0.0;
 double 	rho_t	    = get_rho_anal(V);
 //----------------------------------------------------------------
 clear_charray(cpath, charlength );
-sprintf(cpath, "%sIC_params_a-%d_muN-%.2f_eps-%.2f.txt", pathout.c_str(), a, muN, E0);
-
+sprintf(cpath, "%simport_t0_rho0_muN-%.2f_eps-%.2f_a-%d.txt", pathout.c_str(), muN, E0, a);
 ofstream params_out(cpath);
 
-params_out << a << " \t " << muN           << " \t " << E0 << endl;
-params_out << std::setprecision(10) << t << " \t " << rho/double(L) << " \t " << coverage << " \t " << L  << endl;
-params_out << plotnum << endl;
 
+params_out << std::setprecision(10) << t << " \t " << rho/double(L) << " \t " << dummy << " \t " << phys_bound  << endl;
 params_out.close();
 //----------------------------------------------------------------
 clear_charray(cpath, charlength );
-sprintf(cpath, "%sfinal_vdist_a-%d_muN-%.2f_eps-%.2f.txt", pathout.c_str(), a, muN, E0);
-// sprintf(cpath, "%sICirreva-%d_vdens_vprobdist_hasbeenneg.txt", pathout.c_str(), a);
-
+sprintf(cpath, "%simport_V0dist_muN-%.2f_E0-%.2f_a-%d.txt", pathout.c_str(), muN, E0, a);
 
 ofstream vdist_out(cpath);
 
 for(i=0;i<=L;i++)
 	{
-	vdist_out << V[i]/L << " \t " << V[i]/(rho_t) << " \t " << has_been_neg[i] << endl;
+	vdist_out << (i+1) << " \t " << V[i]/L << " \t " << V[i]/(rho_t) << " \t " << has_been_neg[i] << endl;
 	}
 vdist_out.close();
 //----------------------------------------------------------------

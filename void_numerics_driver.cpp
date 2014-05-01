@@ -217,7 +217,7 @@ else
 
 if( L < 5*a  )
 	{
-	cout << "\n WARNING: system size is less than 5 particles. exiting.\n";
+	cout << "\n WARNING: system size is less than 5 particle lengths. \n";
 //!	cout << " the interaction range of the coarse-grained particles. too small. Exiting.\n";
 //!	exit(1);
 	}
@@ -339,7 +339,7 @@ if(SNG || LNG)
 //------------read in parameters from previous iteration--------------
 
 clear_charray(cpath, charlength );
-sprintf(cpath, "%svoiddat%sBZ%s-_E0-%.2f_muN-%.2f_t_rho_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0,P->muN);
+sprintf(cpath, "%svoiddat%sBZ%s_E0-%.2f_muN-%.2f_t_rho_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0,P->muN);
 
 
 foutmain = new ofstream(cpath);	

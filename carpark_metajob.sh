@@ -9,14 +9,17 @@
 
 #---------------------------------------------------------------------------------------------------------------------------
 
+make
+
 NGtype=LNG
 
-Llim=200
+Llim=1000
 t0="0.0000000001"
-tf="80"
-a="10"  
+#tf="80"
+tf="0.00001"
+a="30"  
 
-should_plot_Vdist_v_t="0"
+should_plot_Vdist_v_t="1"
 should_plot_rhos="1"
 should_check_neg="1"
 
@@ -32,11 +35,11 @@ opath="./"
 
 
 job_sub_script=carpark_jobsub_TUM.sh
-WORKDIR=./void_EQ_output_on_space/job_phasespace_peakterminated_a-${a}_output_${NGtype}/
+WORKDIR=./void_EQ_output_on_space/job_phasespace_ICprep_a-${a}_output_${NGtype}/
 
 #----------------------------------------------------------------------------------------
 
-eps_array_file="/home/t30/ger/ga79moz/grad_research_phd/project/Nucl/void_numerics/array_eps_a"${a}".txt"
+eps_array_file="/home/t30/ger/ga79moz/grad_research_phd/project/Nucl/scan_space_eps_muN/array_eps_a"${a}".txt"
 
 if [ -f ${eps_array_file} ];
 then
@@ -46,7 +49,7 @@ else
    exit 
 fi
 
-muN_array_file="/home/t30/ger/ga79moz/grad_research_phd/project/Nucl/void_numerics/array_muN_a"${a}".txt"
+muN_array_file="/home/t30/ger/ga79moz/grad_research_phd/project/Nucl/scan_space_eps_muN/array_muN_a"${a}".txt"
 
 if [ -f ${muN_array_file} ];
 then
@@ -109,7 +112,7 @@ echo "#!/bin/bash"                     >   ${WORKDIR}${job_sub_script}
 echo "#$ -S /bin/sh"                   >>  ${WORKDIR}${job_sub_script}
 
 echo "#$ -cwd"                         >>  ${WORKDIR}${job_sub_script}
-echo "#$ -m eas"                       >>  ${WORKDIR}${job_sub_script}
+# echo "#$ -m eas"                       >>  ${WORKDIR}${job_sub_script}
 echo "#$ -l h_vmem=500M,s_rt=12:59:0"  >>  ${WORKDIR}${job_sub_script}
 echo "#$ -t 1-"${num_tasks}            >>  ${WORKDIR}${job_sub_script}
 
@@ -132,7 +135,7 @@ cat carpark_jobsub_tail.sh              >>  ${WORKDIR}${job_sub_script}
 #-----------GO TO THE WORK DIRECTORY AND EXECUTE ----------------
 cd $WORKDIR
 
-qsub ${job_sub_script}
+# qsub ${job_sub_script}
 
 #--------------------------------------------
 

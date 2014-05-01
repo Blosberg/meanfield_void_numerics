@@ -216,7 +216,7 @@ while (t < P->t1)
 		rho_t	    = (*P).get_rho_anal(V);
 		dummy       = (*P).get_mean_stddev(V);
 		//---------------------OUTPUT TO FILE ----THIS IS WHERE WE PLOT THE FILLING -------------------------
-		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << (rhodot_num)/(P->L ) << endl;
+		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << (rhodot_num)/(P->L ) << " \t " << P->phys_bound << endl;
 		 //removed: << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
 		 //----- we're not using the mean or std. dev.'s anymore, so don't bother with them. 
 		}
@@ -247,6 +247,11 @@ while (t < P->t1)
     
     }//================================================================-----------------------------
 //finished while loop (i.e. t has reached t1)
+
+if(P->should_export_IC)
+	{
+	P->export_IC(V);
+	}
 
 //--we don't bother with this anymore, for efficiency. (*P->log) << "\n at the end of the simulation, " << step << " steps were taken." << endl;
 // cout      << "\n at the end of the simulation, " << step << " steps were taken." << endl;
