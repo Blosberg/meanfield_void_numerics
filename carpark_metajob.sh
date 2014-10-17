@@ -16,7 +16,14 @@ NGtype=LNG
 Llim=1000
 t0="0.0000000001"
 #tf="80"
-tf="0.00001"
+# tf="0.0001"
+tf="10.0"
+
+
+odeiv_cont_eps_abs="1e-10" 
+odeiv_cont_eps_rel="1e-10"
+
+
 a="30"  
 
 should_plot_Vdist_v_t="1"
@@ -35,7 +42,7 @@ opath="./"
 
 
 job_sub_script=carpark_jobsub_TUM.sh
-WORKDIR=./void_EQ_output_on_space/job_phasespace_ICprep_a-${a}_output_${NGtype}/
+WORKDIR=./void_EQ_output_on_space/job_phasespace_1hcutoff_a-${a}_output_${NGtype}/
 
 #----------------------------------------------------------------------------------------
 
@@ -69,11 +76,13 @@ echo "num_eps=" ${num_eps} ", num_mus=" ${num_mus}
 echo "preparing to submit num_tasks=" ${num_tasks}
 
 #-----------------SET UP THE C++ INPUT FILE ---------------------------
-echo $Llim    >  void_numerics.in
-echo $t0 $tf  >> void_numerics.in
-echo $a       >> void_numerics.in
+echo $Llim                                     >   void_numerics.in
+echo $t0 $tf                                   >>  void_numerics.in
+echo $odeiv_cont_eps_abs $odeiv_cont_eps_rel   >>  void_numerics.in
 
-echo ""       >>  void_numerics.in
+echo $a                                        >>  void_numerics.in
+
+echo ""                                        >>  void_numerics.in
 
 echo $should_plot_Vdist_v_t  $should_plot_rhos $should_check_neg >> void_numerics.in
 echo $should_import_IC   $should_export_IC                       >> void_numerics.in
@@ -106,6 +115,8 @@ OLDDIR=`pwd`
 cp void_numerics.x  $WORKDIR/
 cp void_numerics.in $WORKDIR/
 
+
+
 #-----------------  NOW BUILD THE SCRIPT FILE  -----------------
 
 echo "#!/bin/bash"                     >   ${WORKDIR}${job_sub_script}
@@ -115,6 +126,7 @@ echo "#$ -cwd"                         >>  ${WORKDIR}${job_sub_script}
 # echo "#$ -m eas"                       >>  ${WORKDIR}${job_sub_script}
 echo "#$ -l h_vmem=500M,s_rt=12:59:0"  >>  ${WORKDIR}${job_sub_script}
 echo "#$ -t 1-"${num_tasks}            >>  ${WORKDIR}${job_sub_script}
+# echo "#$ -q lagrange"                  >>  ${WORKDIR}${job_sub_script}
 
 
 echo ""                                 >>  ${WORKDIR}${job_sub_script}
@@ -135,7 +147,7 @@ cat carpark_jobsub_tail.sh              >>  ${WORKDIR}${job_sub_script}
 #-----------GO TO THE WORK DIRECTORY AND EXECUTE ----------------
 cd $WORKDIR
 
-# qsub ${job_sub_script}
+qsub ${job_sub_script}
 
 #--------------------------------------------
 

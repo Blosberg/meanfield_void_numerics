@@ -73,6 +73,10 @@ double E0;
 double t;
 double t0, t1; //--the initial step time, and the final simulation time.
 
+double odeiv_cont_eps_abs;
+double odeiv_cont_eps_rel;
+
+
 bool*   printq;		//----the queue of plots to make.
 double* tpoints_vdist;	//----the array of points in time to make this plot.
 int     total_obs_vdist;	//----the number of plots of the void distribution we should make.

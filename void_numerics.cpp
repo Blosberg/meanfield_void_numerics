@@ -19,7 +19,8 @@
 #include <stdio.h>
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_matrix.h>
-#include <gsl/gsl_odeiv.h>
+//--- #include <gsl/gsl_odeiv.h> ---using odeiv2 now.
+#include <gsl/gsl_odeiv2.h>
 #include <gsl/gsl_sf_trig.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_blas.h>
@@ -43,7 +44,26 @@ using namespace std;
 //************************************************************************************
 int jac (double t, const double c[], double *dfdy, double dfdt[], void *params)
 {
-//-----we only have a single vector here; no F(x1,x2...xN); therefore no Jacobian
+//-----our solver (rkf45) does not require the Jacobian
+
+//----from the gsl reference manual:
+/*
+int (* jacobian) (double t, const double y[], double * dfdy, double, dfdt[], void * params);
+
+This function should store the vector of derivative elements
+∂fi(t, y, params)/∂t in the array dfdt and the Jacobian matrix Jij in
+the array dfdy, regarded as a row-ordered matrix J(i,j) = dfdy[i *
+dimension + j] where dimension is the dimension of the system. The
+function should return GSL_SUCCESS if the calculation was completed
+successfully. Any other return value indicates an error.
+Some of the simpler solver algorithms do not make use of the Jacobian
+matrix, so it is not always strictly necessary to provide it (the jacobian
+element of the struct can be replaced by a null pointer for those algorithms).
+However, it is useful to provide the Jacobian to allow the solver
+algorithms to be interchanged—the best algorithms make use of the Jacobian.
+
+*/
+
 }
 
 
@@ -75,17 +95,18 @@ double t = P->t; //--- likewise 't' value may be imported from an unfinished run
 
 bool shouldprint=false;
 //--------------SET UP THE NECESSARY dE evolution parameters--------------	
-const gsl_odeiv_step_type * T = gsl_odeiv_step_rkf45;
+const gsl_odeiv2_step_type * T = gsl_odeiv2_step_rkf45;
 
 double h = P->t0;	// t0 is not changed from the input file in the constructor 
 			// regardless of IC condition. This is just how large we step initially.
-gsl_odeiv_step    * s      =  gsl_odeiv_step_alloc (T, NV);
-gsl_odeiv_control * con    =  gsl_odeiv_control_y_new (h,h);
-gsl_odeiv_evolve  * e      =  gsl_odeiv_evolve_alloc (NV);
+gsl_odeiv2_step    * s      =  gsl_odeiv2_step_alloc (T, NV);
+gsl_odeiv2_control * con    =  gsl_odeiv2_control_y_new ( P->odeiv_cont_eps_abs, P->odeiv_cont_eps_rel);
+gsl_odeiv2_evolve  * e      =  gsl_odeiv2_evolve_alloc (NV);
 
 
-gsl_odeiv_system sys_HNG = {func_HNG, jac, NV, P};
-gsl_odeiv_system sys_SLNG = {func_SLNG, jac, NV, P};
+ gsl_odeiv2_system sys_HNG = {func_HNG, NULL, NV, P}; //---rkf45 does not use the jacobian.
+ gsl_odeiv2_system sys_SLNG = {func_SLNG, NULL, NV, P};
+
 
 int status=0;
 //*****************   NOW  TIME STEP **********************
@@ -121,11 +142,11 @@ while (t < P->t1)
 	
 	if(P->HNG)
 		{
-		status = gsl_odeiv_evolve_apply (e, con, s, &sys_HNG, &t, P->t1, &h, V);
+		status = gsl_odeiv2_evolve_apply (e, con, s, &sys_HNG, &t, P->t1, &h, V);
 		}
 	else if( P->SNG || P->LNG )
 		{
-		status = gsl_odeiv_evolve_apply (e, con, s, &sys_SLNG, &t, P->t1, &h, V);
+		status = gsl_odeiv2_evolve_apply (e, con, s, &sys_SLNG, &t, P->t1, &h, V);
 		}
 	else
 		{
@@ -216,7 +237,7 @@ while (t < P->t1)
 		rho_t	    = (*P).get_rho_anal(V);
 		dummy       = (*P).get_mean_stddev(V);
 		//---------------------OUTPUT TO FILE ----THIS IS WHERE WE PLOT THE FILLING -------------------------
-		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << (rhodot_num)/(P->L ) << " \t " << P->phys_bound << endl;
+		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << (rhodot_num)/(P->L ) << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
 		 //removed: << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
 		 //----- we're not using the mean or std. dev.'s anymore, so don't bother with them. 
 		}
@@ -227,9 +248,9 @@ while (t < P->t1)
     	if( ( (P->rho) <= (rho_old) ) &&  ( (rho_old) <= (rho_old2) )   )
     	{//----two successive steps down or nowhere in density after t_export ==> stopping.
 
-    		*foutmain << t_old2 << "\t" << (rho_old2)/(P->L ) << "\t" << (rhodot_num_old2)/(P->L ) << endl;
-    		*foutmain << t_old  << "\t" << (rho_old )/(P->L ) << "\t" << (rhodot_num_old )/(P->L ) << endl;
-    		*foutmain << t      << "\t" << (rho_t)/(P->L )    << "\t" << (rhodot_num     )/(P->L ) << endl;
+    		*foutmain << t_old2 << "\t" << (rho_old2)/(P->L ) << "\t" << (rhodot_num_old2)/(P->L )  << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
+    		*foutmain << t_old  << "\t" << (rho_old )/(P->L ) << "\t" << (rhodot_num_old )/(P->L )  << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
+    		*foutmain << t      << "\t" << (rho_t)/(P->L )    << "\t" << (rhodot_num     )/(P->L )  << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
    		 
     		if(P->should_export_IC)
     		{
@@ -248,6 +269,14 @@ while (t < P->t1)
     }//================================================================-----------------------------
 //finished while loop (i.e. t has reached t1)
 
+rho_t	    = (*P).get_rho_anal(V);
+
+if( ! P->should_peakterminate || t > P->t1 )
+	{
+	*foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << (rhodot_num)/(P->L ) << " \t " << P->phys_bound << " \t " << h  << " \t " << P->coverage << endl;
+	//--- add one final line to the voiddat file.
+	}
+
 if(P->should_export_IC)
 	{
 	P->export_IC(V);
@@ -256,9 +285,9 @@ if(P->should_export_IC)
 //--we don't bother with this anymore, for efficiency. (*P->log) << "\n at the end of the simulation, " << step << " steps were taken." << endl;
 // cout      << "\n at the end of the simulation, " << step << " steps were taken." << endl;
 
-       gsl_odeiv_evolve_free  (e);
-       gsl_odeiv_control_free (con);
-       gsl_odeiv_step_free    (s);
+       gsl_odeiv2_evolve_free  (e);
+       gsl_odeiv2_control_free (con);
+       gsl_odeiv2_step_free    (s);
 
 
 return 1;

@@ -44,13 +44,16 @@ ODEdat::ODEdat(const double * rates_times, const  int * sizes, const bool * B, c
 {
 int i; 
 //------------------------------------
-t0  = rates_times[0];	//---this is always the same: it sets the step-size. 
+t0  = rates_times[0];	//---this is always the same: it sets the initial step-size. 
 			// ONLY t is changed based on read-in condition.
-t1      = rates_times[1];
-rm      = rates_times[2];
-muN     = rates_times[3];
-E0      = rates_times[4];
-t_export = rates_times[5];
+t1      		= rates_times[1];
+rm      		= rates_times[2];
+muN     		= rates_times[3];
+E0      		= rates_times[4];
+t_export 		= rates_times[5];
+odeiv_cont_eps_abs 	= rates_times[6];
+odeiv_cont_eps_rel 	= rates_times[7];
+
 
 L              = sizes[0];	phys_bound = L;	//--- initially.
 a              = sizes[1];
@@ -101,7 +104,7 @@ std_dev 	 = 0.0;
 t=0;	//--- this will be overwritten inside import_IC() if we call it.
 
 
-int    total_obs_vdist;
+// int    total_obs_vdist;
 
 
 
@@ -891,17 +894,31 @@ double ODEdat::get_rho_anal(const double * V)
 {
 int i;
 double result=0.0;
+coverage = 0.0;
+
 for(i=0;i<L;i++)
-	result += V[i];
+	{
+	result   += V[i];
+	coverage += (i+1)*V[i];
+	}
+if ( should_import_IC)
+	{//---if we've imported our distribution then let's include voids of the *new* size 'L'
+	result += V[L];
+	}
+
+coverage += L*V[L];	// --- here 'coverage' is just being used as a place holder for space conservation. 
+			// --- which is fine, since in the soft core simulation, "coverage" is meaningless anyway.
 
 rho=result;
+
 if(HNG)
 	{
 	coverage = rho*a/L;
 	}
 else if(SNG || LNG )
 	{
-	coverage = rho*a/L; //--implement the "coverage from DNA perspective later.
+ 	//	do nothing... use 'coverage' as a place holder for space-conservation metric. 
+	//	coverage = rho*a/L; //--implement the "coverage from DNA perspective later.
 	}
 else
 	{
@@ -1036,7 +1053,7 @@ for(i=0;i<=L_imported;i++)
 vdist_in >> x >> Vdenscheck >> Norm_inc_check >> has_been_neg_check;
 vdist_in.close();
 
-if( !has_been_neg_check ||  Norm_inc_check != 0.0 || Vdenscheck!= 0.0 || Norm-1.0 >0.00001 || Norm-1.0 < - 0.00001 )
+if( !has_been_neg_check ||  Norm-1.0 >0.00001 || Norm-1.0 < - 0.00001 )
 	{
 	error_reading_input_Vdist:
 	cout << "\n ERROR: SOMETHING went wrong when reading in the Vdistribution file in import_IC. Exiting. \n";
