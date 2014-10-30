@@ -104,7 +104,7 @@ gsl_odeiv2_control * con    =  gsl_odeiv2_control_y_new ( P->odeiv_cont_eps_abs,
 gsl_odeiv2_evolve  * e      =  gsl_odeiv2_evolve_alloc (NV);
 
 
- gsl_odeiv2_system sys_HNG = {func_HNG, NULL, NV, P}; //---rkf45 does not use the jacobian.
+ gsl_odeiv2_system sys_HNG = {func_HNG, NULL, NV, P}; //---rkf45 does not use the jacobian, hence the "NULL".
  gsl_odeiv2_system sys_SLNG = {func_SLNG, NULL, NV, P};
 
 

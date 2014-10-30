@@ -15,30 +15,23 @@
 
 NGtype="LNG"
 
-WORKDIR=./job_smallp_phasespace_v2_${NGtype}/job.${SGE_TASK_ID}
 
-# create a local directory for this job only
-if [ ! -e $WORKDIR ]; then
-    mkdir -p $WORKDIR
-else
-    # this should never happen
-    echo "Clean up /data/$USER/ directory on $HOSTNAME"\
-        | mail -s "SGE-error" $USER
-    exit 1
-fi
+#----------------------------------------------------------------------
+muN=$(head -1 array_muN_a50.txt | tail -1)
+eps=$(head -${SGE_TASK_ID} array_eps_a50.txt | tail -1 )
+k=50
 
-# create a local copy of the program and start the job
-OLDDIR=`pwd`
+# eps=28.0 --- this is for the k-array convergence.
 
-#---------COPY NECESSARY FILES OVER TO THE WORK DIRECTORY-------
-cp void_numerics.x  $WORKDIR/
-cp void_numerics.in $WORKDIR/
-# cp mu_v_irho_folder/mu_v_*           $WORKDIR/
+
+#----- LOG WHEN THE JOB STARTED-------
+D_before=$(date)
+echo " executing job " ${JOB_ID}.${SGE_TASK_ID} " with paramaters : " $NGtype $muN $a $eps  " at " $D_before >> job_${JOB_ID}.${SGE_TASK_ID}.log
 
 
 #-----------GO TO THE WORK DIRECTORY AND EXECUTE ----------------
 cd $WORKDIR
-./void_numerics.x ${SGE_TASK_ID} $NGtype
+./void_numerics.x $NGtype $muN $a $eps
 
 
 # copy all output files back to your home directory

@@ -72,7 +72,7 @@ if( (NGtype!="SNG" && NGtype!="LNG") && (NGtype!="HNG") )
 	goto command_line_garbage;
 	}
 
-if (  ( (NGtype=="SNG"  || NGtype=="LNG" ) && argc != 4) || (NGtype=="HNG" && argc !=3)  )
+if (  ( (NGtype=="SNG"  || NGtype=="LNG" ) && argc != 5) || (NGtype=="HNG" && argc !=5)  )
 	{
 	
 	command_line_garbage:
@@ -88,9 +88,11 @@ if (  ( (NGtype=="SNG"  || NGtype=="LNG" ) && argc != 4) || (NGtype=="HNG" && ar
 
 muN_input     = atof(argv[2]); 
 
+a	      = atoi(argv[3]);			// size of the footprint
+
 if( (NGtype=="SNG"  || NGtype=="LNG" ) )
 	{
-	E0            = atof(argv[3]); //---atof is for floats and doubles.
+	E0            = atof(argv[4]); //---atof is for floats and doubles.
 	}
 
 //----------------------retrieve input data-------------------------------
@@ -113,8 +115,6 @@ string BZflag; //-----flag to determine which reactions are weighted by boltzman
 fin  >> L;			// size of the system after coarse-graining (therefore size of max void.)
 fin  >> t0 >> t1;		// initial time step, termination time.
 fin  >> odeiv_cont_eps_abs >> odeiv_cont_eps_rel; //---error tolerance parameters (see gsl reference handbook -here, eps is epsilon error, NOT our interaction energy) 
-
-fin  >> a;			// size of the footprint
 
 //--NB: removed the read-in of E0 and muN_input, they are now command-line inputs.
 
@@ -229,7 +229,7 @@ if( L < 5*a  )
 //-------------------------- setup the output directory and file --------------------------
 
 clear_charray(cpath, charlength );
-sprintf(cpath, "%s_muN-%.2f_E0-%.2f/", export_path_name.c_str(), muN, E0);
+sprintf(cpath, "%s_muN-%.2f_E0-%.2f_k-%d/", export_path_name.c_str(), muN, E0, a);
 pathout = cpath;
 
 if ( DirectoryExists( pathout.c_str()  ) )

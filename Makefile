@@ -24,7 +24,7 @@ clean:
 	$(RM) $(ALL_OBJS)
 
 debug:
-	g++ -ggdb void_numerics_driver.cpp void_numerics.cpp $(LDFLAGS) -I/opt/local/include
+	g++ -g -ggdb void_numerics_driver.cpp void_numerics.cpp -o void_numerics.x $(LDFLAGS) -I/opt/local/include -I${code_repo_path}
 
 
 
