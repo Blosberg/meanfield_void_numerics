@@ -187,7 +187,10 @@ else
 
 //---   don't use this anymore: muN is now a direct command-line input. 
 //---   muN = muN_input + 1.0*(TASKID-1); 
-muN = muN_input; 
+
+muN = muN_input-gsl_sf_log(double(a)); //---- here convert per-footprint to per-lattice site muN
+E0  = E0/double(a); //----scale the footprint to the lattice site from the footprint (as it's now input)
+
 //---this is done for both SNG and HNG cases.
 
 int init=L;
@@ -229,7 +232,7 @@ if( L < 5*a  )
 //-------------------------- setup the output directory and file --------------------------
 
 clear_charray(cpath, charlength );
-sprintf(cpath, "%s_muN-%.2f_E0-%.2f_k-%d/", export_path_name.c_str(), muN, E0, a);
+sprintf(cpath, "%s_muN-%.2f_E0-%.2f_k-%d/", export_path_name.c_str(), muN, E0*double(a), a);
 pathout = cpath;
 
 if ( DirectoryExists( pathout.c_str()  ) )
