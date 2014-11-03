@@ -232,7 +232,7 @@ if( L < 5*a  )
 //-------------------------- setup the output directory and file --------------------------
 
 clear_charray(cpath, charlength );
-sprintf(cpath, "%s_muN-%.2f_E0-%.2f_k-%d/", export_path_name.c_str(), muN, E0*double(a), a);
+sprintf(cpath, "%s_muN-%.2f_E0-%.2f_k-%d/", export_path_name.c_str(), muN+gsl_sf_log(a), E0*double(a), a);
 pathout = cpath;
 
 if ( DirectoryExists( pathout.c_str()  ) )
