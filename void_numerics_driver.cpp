@@ -72,7 +72,7 @@ if( (NGtype!="SNG" && NGtype!="LNG") && (NGtype!="HNG") )
 	goto command_line_garbage;
 	}
 
-if (  ( (NGtype=="SNG"  || NGtype=="LNG" ) && argc != 5) || (NGtype=="HNG" && argc !=5)  )
+if (  ( (NGtype=="SNG"  || NGtype=="LNG" ) && argc != 5) || (NGtype=="HNG" && argc !=4)  )
 	{
 	
 	command_line_garbage:

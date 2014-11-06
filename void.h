@@ -34,7 +34,8 @@
 
 using namespace std;
 
-
+const double VLJ_rm = 1.125022076; 	// --- for Lennard-Jones potential, this is the distance of the potential 
+					// --- minimum in units of the footprint size (i.e. the crossover point)
 //****************************************************************
 const int Np10 = 10; 		// Resolution of time-samples taken. this is probably high enough resolution on
 
@@ -155,7 +156,7 @@ if(SNG || LNG )
 
 	if(SNG)
 		{
-		VNN_SNG_calc_smallp(v2, L, a, E0); 
+		VNN_SNG_calc_smallp(v2, L, a, VLJ_rm, E0); 
 		}
 	else if(LNG)
 		{
