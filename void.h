@@ -156,7 +156,7 @@ if(SNG || LNG )
 
 	if(SNG)
 		{
-		VNN_SNG_calc_smallp(v2, L, a, VLJ_rm, E0); 
+		VNN_SNG_calc_smallp(v2, L, a, rm, E0); 
 		}
 	else if(LNG)
 		{
@@ -197,46 +197,21 @@ printq        = new bool[total_obs_vdist];
 tpoints_vdist = new double[total_obs_vdist];
 
 
-space_tpoints_logarithmic( t, t1, Np10 , total_obs_vdist, tpoints_vdist);
+space_tpoints_logarithmic( t0, t1, Np10 , total_obs_vdist, tpoints_vdist);
+// ---- ALWAYS SPACE FROM t0 initially, regardless of t0 condition. 
+// ---- now we set printq's to true if their time point has already been printed.
 
 init_array( printq,  total_obs_vdist , false );
 
-/*** --- CANT BE BOTHERED BEING FANCY ABOUT THIS, JUST MAKE THEM EVENLY SPACED ------
-
-bool found=false;
-for(i=0;i<Np10;i++)
+for(i=0; i<total_obs_vdist; i++)
 	{
-	if (t <= dummy_t_points[i])
-		{
-		found = true;
-		break;
+	if(t> tpoints_vdist[i])	//--- in case we are reading in a data set that has already started with t>0
+		{		//--- , and some of the printqs have already been made
+		printq[i]=true;
 		}
-	}
-if ( found == false)
-	{
-	cout  << "\n ERROR: cannot find t0>dummyt0[i]. Exiting. \n ";
-	exit(1);
+	
 	}
 
-int dummy_num_cutoff = i;
-
-total_obs_vdist = dummy_num_t_points-i;	//--- cut off the leading points that come before t0
-
-
-for(i=0;i<total_obs_vdist;i++)
-	{
- 	printq[i]=false;
-	tpoints_vdist[i] = dummy_t_points [ i + dummy_num_cutoff] ;
-	if ( i + dummy_num_cutoff >= dummy_num_t_points )
-		{ 
-		cout << "\n ERROR: reading off array end dummy_t_points."; exit(1); 
-		}
-	}
- -------------------------------------------------------------------------*/
-
-
-//----  @@@ no longer simply space from t0 like this: 
-//----  space_tpoints_logarithmic(t0, t1, Np10 , total_obs_vdist, tpoints_vdist );
 //----------------------------------------------------------------------------------------
 
 
