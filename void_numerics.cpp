@@ -77,8 +77,8 @@ int   NV = P->L+1; //---NV is the number of voids to be considered (including 0)
 
 char cpath[charlength];
 int i,dummy;
-double rho_t=0.0, rho_old=0.0, rho_old2=0.0;
-double t_old=0.0, t_old2=0.0, rhodot_anal=0.0, rhodot_num=0.0, rhodot_num_old=0.0, rhodot_num_old2=0.0;
+double rho_t=0.0;
+double rhodot_anal=0.0, rhodot_num=0.0;
 //----------set up /initialize the array --------------
 double V[NV];
 for(i=0;i<NV;i++)
@@ -104,7 +104,7 @@ gsl_odeiv2_control * con    =  gsl_odeiv2_control_y_new ( P->odeiv_cont_eps_abs,
 gsl_odeiv2_evolve  * e      =  gsl_odeiv2_evolve_alloc (NV);
 
 
- gsl_odeiv2_system sys_HNG = {func_HNG, NULL, NV, P}; //---rkf45 does not use the jacobian, hence the "NULL".
+ gsl_odeiv2_system sys_HNG  = {func_HNG, NULL, NV, P}; //---rkf45 does not use the jacobian, hence the "NULL".
  gsl_odeiv2_system sys_SLNG = {func_SLNG, NULL, NV, P};
 
 
@@ -131,15 +131,6 @@ while (t < P->t1)
 	{ 
 	P->t = t;
 
-	t_old2   = t_old;
-	rho_old2 = rho_old; //---update iteratively.
-	
-	t_old = t;
-	rho_old =  (*P).get_rho_anal(V);//=rho_t;
-
-	rhodot_num_old2 = rhodot_num_old;
-	rhodot_num_old  = rhodot_num;
-	
 	if(P->HNG)
 		{
 		status = gsl_odeiv2_evolve_apply (e, con, s, &sys_HNG, &t, P->t1, &h, V);
@@ -158,13 +149,17 @@ while (t < P->t1)
 		cout << "\n process interrupted at t=" << t << ", status failed in Re inc." << endl;
 		break;
 		}
-	P->step ++;
+
 	//------  get analytic and numeric rho, rhodot for comparison-------------
 
 	rho_t	    = (*P).get_rho_anal(V);
 	empty_space = (*P).get_empty_space(V);
-	dummy       = (*P).get_mean_stddev(V);
-	rhodot_num  = (rho_t-rho_old)/(t-t_old);
+
+//---------- THESE STEPS OPTIMIZED OUT -------------------------
+// 	P->step ++;
+//	dummy       = (*P).get_mean_stddev(V); --- not bothering with this observable anymore.
+//	rhodot_num  = (rho_t-rho_old)/(t-t_old);
+//--------------------------------------------------------------
 	P->t = t;
 
 	if (rho_t > P->maxrho)
@@ -233,47 +228,53 @@ while (t < P->t1)
 	if( P->shouldplotrhos && ( gsl_sf_log(t/t_lastplot) > deltaspacing ) ) 
 		{
 		// output to the t vs. rho file.
-		t_lastplot = t; //---update the current "last point plotted"
+		t_lastplot  = t; //---update the current "last point plotted"
 		rho_t	    = (*P).get_rho_anal(V);
-		dummy       = (*P).get_mean_stddev(V);
-		//---------------------OUTPUT TO FILE ----THIS IS WHERE WE PLOT THE FILLING -------------------------
-		 *foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << (rhodot_num)/(P->L ) << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
-		 //removed: << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
-		 //----- we're not using the mean or std. dev.'s anymore, so don't bother with them. 
+
+		//-------------------------------------------------------------------------------------		
+		//removed: dummy       = (*P).get_mean_stddev(V); 
+		//----- << "\t" << P->mean << " \t " << P->std_dev << "\t" << rhodot_num << endl;
+		//----- we're not using the mean or std. dev.'s anymore, so don't bother with them. 
+		//---------------------OUTPUT TO FILE ----THIS IS WHERE WE PLOT THE FILLING -----------
+
+		*foutmain << t << "\t" << ((*P).rho)/(P->L ) << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
+
 		}
 
 	
-    if( P->should_peakterminate &&  t > P->t_export) //---dont even think about exiting until after t_export.
-	{
-    	if( ( (P->rho) <= (rho_old) ) &&  ( (rho_old) <= (rho_old2) )   )
-    	{//----two successive steps down or nowhere in density after t_export ==> stopping.
+	/*------------------------------------------ REMOVED PEAK-TERMINATE FUNCTIONALITY -------------------------------------------------------------
+	    if( P->should_peakterminate &&  t > P->t_export) //---dont even think about exiting until after t_export.
+		{
+	    	if( ( (P->rho) <= (rho_old) ) &&  ( (rho_old) <= (rho_old2) )   )
+	    		{//----two successive steps down or nowhere in density after t_export ==> stopping.
 
-    		*foutmain << t_old2 << "\t" << (rho_old2)/(P->L ) << "\t" << (rhodot_num_old2)/(P->L )  << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
-    		*foutmain << t_old  << "\t" << (rho_old )/(P->L ) << "\t" << (rhodot_num_old )/(P->L )  << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
-    		*foutmain << t      << "\t" << (rho_t)/(P->L )    << "\t" << (rhodot_num     )/(P->L )  << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
+	    		*foutmain << t_old2 << "\t" << (rho_old2)/(P->L ) << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
+	    		*foutmain << t_old  << "\t" << (rho_old )/(P->L ) << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
+	    		*foutmain << t      << "\t" << (rho_t)/(P->L )    << " \t " << P->phys_bound << " \t " << h << " \t " << P->coverage << endl;
    		 
-    		if(P->should_export_IC)
-    		{
-    			P->export_IC(V);
-    		}
+	    		if(P->should_export_IC)
+	    		{
+	    			P->export_IC(V);
+	    		}
     		
-    		(*P->log) << "\n break condition encountered. slope is negative.";
-	   		(*P->log) << " Exporting current V-distribution, and terminating run at t= " << P->t << endl;
-	
-	   		P->rho = -777.7*P->L;	//---to make sure we don't accidentally take this value to be an equilibrated termination point.
-    		break;
-	
-    	}
-	}
+	    		(*P->log) << "\n break condition encountered. slope is negative.";
+		   		(*P->log) << " Exporting current V-distribution, and terminating run at t= " << P->t << endl;
+		
+		   		P->rho = -777.7*P->L;	//---to make sure we don't accidentally take this value to be an equilibrated termination point.
+	    		break;
+		
+	    		}
+		}
+	------------------------------------------------------------------------------------------------------------------------------------------------*/
     
     }//================================================================-----------------------------
 //finished while loop (i.e. t has reached t1)
 
 rho_t	    = (*P).get_rho_anal(V);
 
-if( ! P->should_peakterminate || t > P->t1 )
+if( ! P->should_peakterminate || t >= P->t1 )
 	{
-	*foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t" << (rhodot_num)/(P->L ) << " \t " << P->phys_bound << " \t " << h  << " \t " << P->coverage << endl;
+	*foutmain << t << "\t" << ((*P).rho)/(P->L ) << "\t"  << P->phys_bound << " \t " << h  << " \t " << P->coverage << endl;
 	//--- add one final line to the voiddat file.
 	}
 

@@ -95,7 +95,6 @@ if ( HNG && SNG)
 pathout = pathout_in;
 plotnum=0;
 plotnum_initial=0; 	//--- this will be over-written if import_IC gets called.
-attempt=0;
 
 mean 		 = 0.0;
 std_dev 	 = 0.0;
@@ -218,6 +217,7 @@ for(i=0; i<total_obs_vdist; i++)
 rho     = 0.0;
 maxrho  = 0.0;
 rhostar = 0.0;
+empty_space= 0.0;
 C1      = 0.0;
 C2      = 0.0;
 //! rhodot  = 0.0;
@@ -290,7 +290,6 @@ plotnum			=param.plotnum; //----the current index of the void-distribution plot.
 
 cpath			=param.cpath;   // [charlength];
 
-attempt			=param.attempt;
 pathout			=param.pathout;
 
 HNG			=param.HNG;
@@ -514,7 +513,7 @@ double C=0.0;
 int  kn = P->a; // ----the particle size.
 int  L  = P->L; // ----the system size.
 //---------------------------------------------------------
-P->attempt +=1;		// keep track of the number of times we've "attempted to time-step here"
+
 P->t = t;		// the current time.
 
 double rm = P->rm;
@@ -523,14 +522,15 @@ double rp = P->rp;	// rp/m = 'plus/minus' --the on off rates.
 int  phys_bound = P->phys_bound;
 
 //--------------------  initialize  ----------------------
-
-init_array( f,  L+1, 0.0 );
+// -- init_array( f,  L+1, 0.0 );
 
 
 
 // (*P).get_rho_anal(V);  //---returns exactly the number of particles in the system -WE DON'T WORRY ABOUT COARSE-GRAINING HERE!
-(*P).get_rhostar(V); 
-(*P).get_empty_space(V);
+
+bool usable_rhostar;
+usable_rhostar=(*P).get_rhostar(V); 
+// ---- (*P).get_empty_space(V); --- not using this anymore 
  
 //----make sure to update rho to fit the numerics in the convolution term (number 4)
 
@@ -558,7 +558,7 @@ if( ! P->has_been_neg[L-kn] )
 
 	for(j=0; j<= (L-2*kn);j++)	 
 		{ 
-		if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) //---- float-error catch (in case rho=0)
+		if( usable_rhostar ) //---- float-error catch (in case rho=0)
 			{
 			f[L-kn] += (rm/(P->rhostar))*V[j]*V[L-2*kn-j];
 			}
@@ -587,7 +587,7 @@ for(m=0; ( (m<= (L-2*kn)) &&(m<=phys_bound) ) ;m++)
 		//----term (4) ---creation of void 'm' from desorption of neighbour with next void adding up to m.   
 		for(j=0; j<= (m-kn);j++)	 
 			{ 
-			if( !isnan(1/(P->rhostar)) && !isinf(1/(P->rhostar)) ) //---- in case rho=0
+			if( usable_rhostar ) //---- in case rho=0
 				{f[m] += (rm/(P->rhostar))*V[j]*V[m-kn-j];}
 			}
 		}
@@ -614,20 +614,21 @@ int  L = P->L; // ----the system size.
 int  phys_bound = P->phys_bound;
 
 //---------------------------------------------------------
-P->attempt +=1;		// keep track of the number of times we've "attempted to time-step here"
 P->t = t;		// the current time.
+
 
 double rm = P->rm;
 double rp = P->rp;	// rp/m = 'plus/minus' --the on off rates.
 
 //--------------------  initialize  ----------------------
+// init_array( f,  L+1, 0.0 ); -- it gets set to the first term anyway: f[m]=-2*rm*V[m]... hence, no need for the first initialization.
 
-init_array( f,  L+1, 0.0 );
+bool usable_rhostar;
+usable_rhostar=(*P).get_rhostar(V); //---- usable_rhostar is 1 iff rhostar is neither 0 nor nan. 
 
-// (*P).get_rho_anal(V);  //---returns exactly the number of particles in the system
-(*P).get_rhostar(V); 
-(*P).get_empty_space(V);
- 
+//--- (*P).get_rho_anal(V);    --- returns exactly the number of particles in the system
+//--- (*P).get_empty_space(V); --- not using this anymore.
+  
 //----make sure to update rho to fit the numerics in the convolution term (number 4)
 
 if( P->boltzmann_on_add)
@@ -643,7 +644,7 @@ if( P->boltzmann_on_add)
 	if( ! P->has_been_neg[L-1] )
 		{
 		//----single particle in system         0|------------|<-k->|--------------|L	
-		f[L-1]  = -1*rm*V[L-1] + 1*rp*L*V[L]*P->Bzman_v2[L-1];     
+		f[L-1]  = -1*rm*V[L-1] + rp*L*V[L]*P->Bzman_v2[L-1];     
 		//---term 1 only has a single rm-removal rate., 
 					// term 2 has full range of 'L' binding sites.
 		for(i=0;i<(L-1);i++)
@@ -657,12 +658,13 @@ if( P->boltzmann_on_add)
 
 		for(j=0; j<= (L-1-1);j++)	 
 			{ 
-			if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) 
+			if( usable_rhostar ) 
 				{ //---- THIS IS A float-error catch (in case rho=0)
 				f[L-1] += (rm/(P->rhostar))*V[j]*V[L-1-j];
 				}
 			}
-		}		
+		}
+		
 	//---- done handling special finite-size cases; the rest are canonical ==========
 	for(m=0; ((m < (L-1)) &&(m<=phys_bound) ) ;m++)
 		{
@@ -684,7 +686,7 @@ if( P->boltzmann_on_add)
 		//----term (4) ---creation of void 'm' from desorption of neighbour with next void adding up to m.   
 		for(j=0; j<= (m-1);j++)	 
 			{ 
-			if( !isnan(1/(P->rhostar)) && !isinf(1/(P->rhostar)) ) //---- in case rho=0
+			if( usable_rhostar ) //---- in case rho=0
 				{
 				f[m] += (rm/(P->rhostar))*V[j]*V[m-1-j];
 				}
@@ -717,10 +719,11 @@ else if( P->boltzmann_on_removal)//-------------------bolztmann factors on remov
 		f[L-1] -= rp*(L-1) * V[L-1];    //--- term 3 : same as canonical case 
 					 //--- equal binding possibilities everywhere.
 
-		for(j=0; j<= (L-1-1);j++)	//--- term 4 convolution 
-			{ 			//
-			if( !isnan(1.0/(P->rhostar)) && !isinf(1.0/(P->rhostar)) ) 
-				{ //---- THIS IS A float-error catch (in case rho=0)
+
+		if( usable_rhostar )    //---- THIS IS A float-error catch (in case rho=0)
+			{
+			for(j=0; j<= (L-1-1);j++)	//--- term 4 convolution 
+				{ 			//
 				f[L-1] += (rm/(P->rhostar))*V[j]*V[L-1-1-j] * ( (P->Bzman_v2[L-1])/ (P->Bzman_v2[j]*P->Bzman_v2[L-1-1-j] ) )    ;
 				}
 			}
@@ -735,7 +738,7 @@ else if( P->boltzmann_on_removal)//-------------------bolztmann factors on remov
 		//----term(1) -particles on either side leaving.
 		for(i=0; i<=(L-2-m) ;i++)	
 			{
-			f[m] -= 2*rm*V[m] * (V[i]/P->rhostar) * (1/(P->Bzman_v2[m]*P->Bzman_v2[i] ))*P->Bzman_v2[i+m+1] ; 
+			f[m] = -2*rm*V[m] * (1/(P->Bzman_v2[m]*P->Bzman_v2[i] ))*P->Bzman_v2[i+m+1] ; 
 			}
 		//----term (2) ---creation of void 'm' from a larger one.  
 		// @@@ --- optimized out: for(i=m+1; i<=(L-1) ;i++)	
@@ -743,7 +746,7 @@ else if( P->boltzmann_on_removal)//-------------------bolztmann factors on remov
 		for(i=m+1; (i<=(L-1) && i <= phys_bound ); i++)	// --- V'>phys_bound are all 0.
 
 			{ //---term 2 
-			f[m]+=2*rp*V[i]; 
+			f[m] += 2*rp*V[i]; 
 			}
 		
 		//---term(3) disappearance of V[m] due to adsorption in its interior.	
@@ -751,10 +754,12 @@ else if( P->boltzmann_on_removal)//-------------------bolztmann factors on remov
 		f[m] -= rp*V[m] * m; 
 
 		//----term (4) ---creation of void 'm' from desorption of neighbour with next void adding up to m.   
-		for(i=0; i<= (m-1);i++)	 
-			{ 
-			if( !isnan(1/(P->rhostar)) && !isinf(1/(P->rhostar)) ) //---- in case rho=0
-				{
+
+		if( usable_rhostar ) //---- in case rho=0
+			{
+
+			for(i=0; i<= (m-1);i++)	 
+				{ 
 				f[m] += (rm/(P->rhostar))*V[i]*V[m-1-i]* (P->Bzman_v2[m] /(P->Bzman_v2[i]*P->Bzman_v2[m-1-i])) ;
 				}
 			}
@@ -767,12 +772,14 @@ return GSL_SUCCESS;
 }
 
 //*********************************************************************************
-double ODEdat::get_rhostar(const double * V)
+bool ODEdat::get_rhostar(const double * V)
 {//------from page 63 in notebook (the normalization factor that should impose conservation criteria)
 int j,n,m;
-double result= 0.0;
+bool usable= 0.0; //--return value for whether the result is neither zero nor inf.
 double denom=0.0;
 double num=0.0;
+
+bool result;	//---true/false, regarding whether or not the result is numerically usable.
 
 double inner_sum=0.0;
 
@@ -830,14 +837,16 @@ else if(SNG || LNG)
 	//------------------------------------------
 	}
 
+rhostar = num/denom;
 
-
-if( !isnan(num/denom) && !isinf(num/denom) ) //---- float-error catch (in case rhostar=0)
-	result  = num/denom;
+if( isnan(rhostar) || isinf(rhostar) || isnan(1.0/rhostar) || isinf(1.0/rhostar)  ) //---- float-error catch (in case rhostar=0)
+	{
+	result  = false; //--- result is NOT numerically stable and usable. hence return=false
+	}
 else 
-	result = 1;
-
-rhostar = result;
+	{
+	result = true;	 //--- result is a finite number. return=true
+	}
 return result;
 }
 //*********************************************************************************
@@ -991,6 +1000,8 @@ if( t0_rho0_in.fail() )
 t0_rho0_in >> t_imported >> rho_imported >> dummy >> L_imported  ;
 t0_rho0_in.close();
 
+L_imported = L; //---- NEW IMPORT CONDITION: keeping even terms that were briefly <0
+
 double  V_temp[L_imported+1] ;
 int     has_been_neg_temp[L_imported+1]; 
 
@@ -1020,21 +1031,25 @@ for(i=0;i<=L_imported;i++)
 	{
 	vdist_in >> x >> V_temp[i] >> Norm_inc >> has_been_neg_temp[i];
 	Norm += Norm_inc;
+	/*---- commenting out this error check since we now DO include a larger V set.  
 	if( has_been_neg_temp[i] || x!=i+1)
 		{
 		goto error_reading_input_Vdist;
 		}
+	*/
 	}
 
 vdist_in >> x >> Vdenscheck >> Norm_inc_check >> has_been_neg_check;
 vdist_in.close();
 
+/* ------ AGAIN IGNORING THIS ERROR CHECK.
 if( !has_been_neg_check ||  Norm-1.0 >0.00001 || Norm-1.0 < - 0.00001 )
 	{
 	error_reading_input_Vdist:
 	cout << "\n ERROR: SOMETHING went wrong when reading in the Vdistribution file in import_IC. Exiting. \n";
 	exit(1);
 	}
+*/
 
 //--- L_imported is now the last index which is ruled physical.
 //--- THIS IS THE SIZE OF THE NEW SYSTEM, AND WE MUST ALLOCATE ONE MORE FOR THE ZERO PLACE.
@@ -1047,7 +1062,7 @@ phys_bound  = L_imported;
 V_IC = new double[L+1];
 for(i=0;i<=L;i++)
 	{
-	V_IC[i] = L * V_temp[i];
+	V_IC[i] = L * V_temp[i] * (1.0/Norm_inc_check);
 	}
 //----------------------------------------------------------------
 t   = t_imported;

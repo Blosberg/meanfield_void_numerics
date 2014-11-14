@@ -93,7 +93,6 @@ int   plotnum_initial;  	//--- the offset, in case we are importing IC's
 
 char cpath;   // [charlength];
 
-int attempt;
 string pathout;
 
 bool HNG, SNG, LNG; //--the type of 2-body interaction.
@@ -116,7 +115,8 @@ int    get_mean_stddev(const double * V);
 double get_empty_space(const double * V);	//--- the fraction of space unoccupied.
 double get_rho_anal(const double * V);		//--- the density per system length
 double get_C(const double * V);			//--- allocates the two terms of the conserved quantity
-double get_rhostar(const double * V);		//--- the normalization factor on the convolution term to impose conservation.
+bool   get_rhostar(const double * V);		//--- the normalization factor on the convolution term to impose conservation.
+						//--- returns 1 iff the factor is numerically "usable" -i.e. neither 0 nor inf.
 
 
 int import_IC(void);		//---- import the void dists and t, rho.

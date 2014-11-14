@@ -19,6 +19,10 @@ void_numerics.x: $(OBJ)
 #void_numerics.db: $(OBJ)
 #	g++ -g -o $@ $^ $(LDFLAGS)
 
+#---- to compile with gprofiler data:
+#---- g++ -pg -ggdb void_numerics_driver.cpp void_numerics.cpp -o void_numerics.x   -L/sw/lib -lgsl -lm -lgslcblas  -I/opt/local/include  -I/home/t30/ger/ga79moz/grad_research_phd/project/code_repository/
+
+
 ALL_OBJS = void_numerics_driver.obj  void_numerics.obj
 clean:
 	$(RM) $(ALL_OBJS)
