@@ -606,15 +606,14 @@ int func_SLNG (double t, const double V[], double f[], void *params)
 
 
 ODEdat*  P = (ODEdat *)params;
-//P->V = V;
+// P->V = V;
+// P->t = t;		// the current time. ==== optimizing out both of these things.
 
-int i=0,j=0,m=0; //-----counter ints
-double C=0.0;
+int  i = 0,j=0,m=0; //-----counter ints
 int  L = P->L; // ----the system size.
 int  phys_bound = P->phys_bound;
 
 //---------------------------------------------------------
-P->t = t;		// the current time.
 
 
 double rm = P->rm;
