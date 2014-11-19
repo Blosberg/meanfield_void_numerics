@@ -257,9 +257,9 @@ ofstream v2pot_output;
 
 //----------- DOCUMENTATION ------------------------------------------------------------
 
-*flog << "\n for this run, muN=" << muN;
+*flog << "\n for this run, in terms of lattice sites, muN=" << muN;
 *flog << "\n muN_input = " << muN_input;
-*flog << "\n a = " << a << ", E0 = " << E0;
+*flog << "\n a = " << a << ", in terms of lattice sites, E0 = " << E0;
 *flog << "\n before any IC imports, input file specifies L=" << L;
 *flog << "\n NGtype = " << NGtype;
 *flog << "\n t1 = " << t1 ;
@@ -271,6 +271,7 @@ ofstream v2pot_output;
 *flog << "\n BZflag =" << BZflag << endl;
 
 *flog << "\n t0 initially input = " << t0 ;
+*flog << "\n the perfootprint values of mu, or epsilon are saved to the filename\n";
 
 
 //-------- dynamically set the initial step size:
@@ -363,7 +364,7 @@ if(SNG || LNG)
 //------------read in parameters from previous iteration--------------
 
 clear_charray(cpath, charlength );
-sprintf(cpath, "%svoiddat%sBZ%s_E0-%.2f_muN-%.2f_t_rho_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0*double(a),P->muN);
+sprintf(cpath, "%svoiddat%sBZ%s_E0-%.2f_muN-%.2f_t_rho_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0*double(a),P->muN+gsl_sf_log(double(a)) );
 
 
 foutmain = new ofstream(cpath,std::ofstream::app );	
