@@ -363,7 +363,7 @@ if(SNG || LNG)
 //------------read in parameters from previous iteration--------------
 
 clear_charray(cpath, charlength );
-sprintf(cpath, "%svoiddat%sBZ%s_E0-%.2f_muN-%.2f_t_rho_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0,P->muN);
+sprintf(cpath, "%svoiddat%sBZ%s_E0-%.2f_muN-%.2f_t_rho_rhodotnum.txt", pathout.c_str(), NGtype.c_str(), BZ.c_str(),P->E0*double(a),P->muN);
 
 
 foutmain = new ofstream(cpath,std::ofstream::app );	
