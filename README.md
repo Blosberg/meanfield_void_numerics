@@ -3,7 +3,7 @@ Here is a repository of the necessary files to run the mean-field calculation of
 
 The code can be used to show the unique features of adosorption density for soft interacting particles, as shown in the attached figures:
  
-![](SI_rhodot_anal_v3.jpg)
+![](SI_rhodot_anal_v3.jpg  | width=100)
 The fixed points of density converge to unity in the limit of stiffness, adsorption affinity tending to infinity. This is why hard particles are constrained to purely monotonic density profiles with time (see PRL cited above). 
 
 ![](SI_rhoeq_vs_muplot.jpg) 
