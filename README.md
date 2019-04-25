@@ -3,10 +3,10 @@ Here is a repository of the necessary files to run the mean-field calculation of
 
 The code can be used to show the unique features of adosorption density for soft interacting particles, as shown in the attached figures:
  
- <img src="SI_rhodot_anal_v3.jpg" width="200">
+ <img src="SI_rhodot_anal_v3.jpg" width="500">
 The fixed points of density converge to unity in the limit of stiffness, adsorption affinity tending to infinity. This is why hard particles are constrained to purely monotonic density profiles with time (see PRL cited above). 
 
-![](SI_rhoeq_vs_muplot.jpg) 
+ <img src="SI_rhoeq_vs_muplot.jpg" width="500">
 
 Three independent models converge to predict the steady-state density: mean-field void numerics; defect creation/annihilation with diffusion, and the thermodynamic equilibrium calculated from the transfer matrix (see https://www.pnas.org/content/110/14/5719, supplement).
 
